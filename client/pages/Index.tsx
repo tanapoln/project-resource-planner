@@ -1,62 +1,85 @@
-import { DemoResponse } from "@shared/api";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useAppData } from "@/lib/useAppData";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import MembersPanel from "@/components/MembersPanel";
+import ProjectsPanel from "@/components/ProjectsPanel";
+import ScheduleView from "@/components/schedule/ScheduleView";
+import { CalendarDays, Users, FolderKanban, LayoutGrid } from "lucide-react";
 
 export default function Index() {
-  const [exampleFromServer, setExampleFromServer] = useState("");
-  // Fetch users on component mount
-  useEffect(() => {
-    fetchDemo();
-  }, []);
-
-  // Example of how to fetch data from the server (if needed)
-  const fetchDemo = async () => {
-    try {
-      const response = await fetch("/api/demo");
-      const data = (await response.json()) as DemoResponse;
-      setExampleFromServer(data.message);
-    } catch (error) {
-      console.error("Error fetching hello:", error);
-    }
-  };
+  const data = useAppData();
+  const [tab, setTab] = useState("schedule");
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-      <div className="text-center">
-        {/* TODO: FUSION_GENERATION_APP_PLACEHOLDER replace everything here with the actual app! */}
-        <h1 className="text-2xl font-semibold text-slate-800 flex items-center justify-center gap-3">
-          <svg
-            className="animate-spin h-8 w-8 text-slate-400"
-            viewBox="0 0 50 50"
-          >
-            <circle
-              className="opacity-30"
-              cx="25"
-              cy="25"
-              r="20"
-              stroke="currentColor"
-              strokeWidth="5"
-              fill="none"
+    <div className="min-h-screen bg-background">
+      {/* Top bar */}
+      <header className="sticky top-0 z-30 bg-card/80 backdrop-blur-md border-b">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <LayoutGrid className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <span className="font-semibold text-base tracking-tight">ResourceHub</span>
+          </div>
+          <div className="text-xs text-muted-foreground hidden sm:block">
+            {data.members.length} members &middot; {data.projects.length} projects &middot; {data.assignments.length} assignments
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="mb-6">
+            <TabsTrigger value="schedule" className="gap-1.5">
+              <CalendarDays className="h-4 w-4" />
+              <span className="hidden sm:inline">Schedule</span>
+            </TabsTrigger>
+            <TabsTrigger value="members" className="gap-1.5">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Members</span>
+            </TabsTrigger>
+            <TabsTrigger value="projects" className="gap-1.5">
+              <FolderKanban className="h-4 w-4" />
+              <span className="hidden sm:inline">Projects</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="schedule">
+            <ScheduleView
+              teams={data.teams}
+              members={data.members}
+              projects={data.projects}
+              assignments={data.assignments}
+              addAssignment={data.addAssignment}
+              updateAssignment={data.updateAssignment}
+              deleteAssignment={data.deleteAssignment}
             />
-            <circle
-              className="text-slate-600"
-              cx="25"
-              cy="25"
-              r="20"
-              stroke="currentColor"
-              strokeWidth="5"
-              fill="none"
-              strokeDasharray="100"
-              strokeDashoffset="75"
+          </TabsContent>
+
+          <TabsContent value="members">
+            <MembersPanel
+              teams={data.teams}
+              members={data.members}
+              addTeam={data.addTeam}
+              updateTeam={data.updateTeam}
+              deleteTeam={data.deleteTeam}
+              addMember={data.addMember}
+              updateMember={data.updateMember}
+              deleteMember={data.deleteMember}
             />
-          </svg>
-          Generating your app...
-        </h1>
-        <p className="mt-4 text-slate-600 max-w-md">
-          Watch the chat on the left for updates that might need your attention
-          to finish generating
-        </p>
-        <p className="mt-4 hidden max-w-md">{exampleFromServer}</p>
-      </div>
+          </TabsContent>
+
+          <TabsContent value="projects">
+            <ProjectsPanel
+              projects={data.projects}
+              addProject={data.addProject}
+              updateProject={data.updateProject}
+              deleteProject={data.deleteProject}
+            />
+          </TabsContent>
+        </Tabs>
+      </main>
     </div>
   );
 }
