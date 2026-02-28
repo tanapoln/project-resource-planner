@@ -51,6 +51,9 @@ export default function Index() {
               members={data.members}
               projects={data.projects}
               assignments={data.assignments}
+              addTeam={data.addTeam}
+              addMember={data.addMember}
+              addProject={data.addProject}
               addAssignment={data.addAssignment}
               updateAssignment={data.updateAssignment}
               deleteAssignment={data.deleteAssignment}

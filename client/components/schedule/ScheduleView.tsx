@@ -8,6 +8,7 @@ import { assignLanes } from "@/lib/laneUtils";
 import TimelineHeader from "./TimelineHeader";
 import GanttBar from "./GanttBar";
 import AssignmentDialog from "./AssignmentDialog";
+import ScheduleCsvDialog from "./ScheduleCsvDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +21,9 @@ interface Props {
   members: Member[];
   projects: Project[];
   assignments: Assignment[];
+  addTeam: (t: Omit<Team, "id">) => Team;
+  addMember: (m: Omit<Member, "id">) => Member;
+  addProject: (p: Omit<Project, "id">) => Project;
   addAssignment: (a: Omit<Assignment, "id">) => { success: boolean; conflicts: Assignment[] };
   updateAssignment: (id: string, data: Partial<Assignment>) => { success: boolean; conflicts: Assignment[] };
   deleteAssignment: (id: string) => void;
@@ -70,6 +74,7 @@ interface SwimlaneGroup {
 
 export default function ScheduleView({
   teams, members, projects, assignments,
+  addTeam, addMember, addProject,
   addAssignment, updateAssignment, deleteAssignment,
 }: Props) {
   const [offset, setOffset] = useState(0);
@@ -302,6 +307,17 @@ export default function ScheduleView({
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+
+          <ScheduleCsvDialog
+            teams={teams}
+            members={members}
+            projects={projects}
+            assignments={assignments}
+            addTeam={addTeam}
+            addMember={addMember}
+            addProject={addProject}
+            addAssignment={addAssignment}
+          />
 
           <Button size="sm" className="h-8" onClick={() => { setDialogDefaults({}); setDialogOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Assign

@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Project } from "@/lib/types";
+import { parseProjectCsv, escapeCsv } from "@/lib/csvImport";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, FolderKanban } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderKanban, Upload, Download } from "lucide-react";
 
 interface Props {
   projects: Project[];
@@ -22,6 +24,10 @@ const PROJECT_COLORS = [
 export default function ProjectsPanel({ projects, addProject, updateProject, deleteProject }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
+  const [csvDialog, setCsvDialog] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<{ name: string; description: string; color: string }[]>([]);
+  const [csvFileName, setCsvFileName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -52,18 +58,76 @@ export default function ProjectsPanel({ projects, addProject, updateProject, del
     setDialogOpen(false);
   };
 
+  // --- CSV Import ---
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseProjectCsv(text);
+      setCsvPreview(rows);
+      setCsvDialog(true);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleCsvImport = () => {
+    for (const row of csvPreview) {
+      const projectColor = row.color && /^#[0-9a-fA-F]{6}$/.test(row.color)
+        ? row.color
+        : PROJECT_COLORS[(projects.length + csvPreview.indexOf(row)) % PROJECT_COLORS.length];
+      addProject({ name: row.name, description: row.description, color: projectColor });
+    }
+    setCsvDialog(false);
+    setCsvPreview([]);
+  };
+
+  // --- CSV Export ---
+  const handleExportCsv = useCallback(() => {
+    const header = "Name,Description,Color";
+    const rows = projects.map((p) =>
+      `${escapeCsv(p.name)},${escapeCsv(p.description)},${escapeCsv(p.color)}`
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "projects-export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [projects]);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Projects</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             {projects.length} project{projects.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button size="sm" onClick={() => openDialog()}>
-          <Plus className="h-4 w-4 mr-1" /> Add Project
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <Button variant="outline" size="sm" onClick={handleExportCsv}>
+            <Download className="h-4 w-4 mr-1" /> Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-1" /> Import CSV
+          </Button>
+          <Button size="sm" onClick={() => openDialog()}>
+            <Plus className="h-4 w-4 mr-1" /> Add Project
+          </Button>
+        </div>
       </div>
 
       {projects.length === 0 ? (
@@ -86,6 +150,7 @@ export default function ProjectsPanel({ projects, addProject, updateProject, del
         </div>
       )}
 
+      {/* Project CRUD Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -120,6 +185,58 @@ export default function ProjectsPanel({ projects, addProject, updateProject, del
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave}>{editing ? "Update" : "Create"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import Preview Dialog */}
+      <Dialog open={csvDialog} onOpenChange={setCsvDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import Projects from CSV</DialogTitle>
+            <DialogDescription>
+              Preview of {csvPreview.length} project{csvPreview.length !== 1 ? "s" : ""} from "{csvFileName}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 overflow-y-auto border rounded-md">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Name</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Description</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Color</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {csvPreview.map((row, i) => (
+                  <tr key={i} className="hover:bg-muted/20">
+                    <td className="px-3 py-2">{row.name}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{row.description || "—"}</td>
+                    <td className="px-3 py-2">
+                      {row.color && /^#[0-9a-fA-F]{6}$/.test(row.color) ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: row.color }} />
+                          <span className="text-xs text-muted-foreground">{row.color}</span>
+                        </div>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">Auto</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {csvPreview.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No valid rows found. Make sure the CSV has columns: Name, Description, Color.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvDialog(false)}>Cancel</Button>
+            <Button onClick={handleCsvImport} disabled={csvPreview.length === 0}>
+              Import {csvPreview.length} Project{csvPreview.length !== 1 ? "s" : ""}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
