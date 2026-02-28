@@ -63,8 +63,15 @@ export function getTimelineColumns(
     else if (granularity === "month") rangeStart = startOfMonth(dataMinDate);
     else rangeStart = startOfQuarter(dataMinDate);
   }
-  if (dataMaxDate && dataMaxDate > rangeEnd) {
-    rangeEnd = dataMaxDate;
+  if (dataMaxDate) {
+    // Ensure minimum padding after the last assignment end date
+    let paddedEnd: Date;
+    if (granularity === "day") paddedEnd = addDays(dataMaxDate, 30);
+    else if (granularity === "week") paddedEnd = addWeeks(dataMaxDate, 4);
+    else if (granularity === "month") paddedEnd = addMonths(dataMaxDate, 3);
+    else paddedEnd = addQuarters(dataMaxDate, 2);
+
+    if (paddedEnd > rangeEnd) rangeEnd = paddedEnd;
   }
 
   // Generate columns from rangeStart to rangeEnd
