@@ -18,8 +18,20 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { AlertTriangle } from "lucide-react";
+import {
+  Popover, PopoverTrigger, PopoverContent,
+} from "@/components/ui/popover";
+import {
+  Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
+} from "@/components/ui/command";
+import { AlertTriangle, Check, ChevronsUpDown, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { dateToString } from "@/lib/dateUtils";
+
+const PROJECT_COLORS = [
+  "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6",
+  "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16",
+];
 
 interface Props {
   open: boolean;
@@ -32,6 +44,7 @@ interface Props {
     success: boolean;
     conflicts: Assignment[];
   };
+  onCreateProject: (p: Omit<Project, "id">) => Project;
 }
 
 export default function AssignmentDialog({
@@ -42,12 +55,15 @@ export default function AssignmentDialog({
   teams,
   defaults,
   onSave,
+  onCreateProject,
 }: Props) {
   const [memberId, setMemberId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [error, setError] = useState("");
+  const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -63,8 +79,10 @@ export default function AssignmentDialog({
         setEndDate(dateToString(end));
       }
       setError("");
+      setProjectSearch("");
     }
-  }, [open, defaults, projects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaults]);
 
   // Compute which members have conflicts for the current date range
   const { availableMembers, conflictedMembers, conflictMap } = useMemo(() => {
@@ -210,24 +228,87 @@ export default function AssignmentDialog({
           </div>
           <div>
             <label className="text-sm font-medium mb-1.5 block">Project</label>
-            <Select value={projectId} onValueChange={setProjectId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
+            <Popover open={projectPopoverOpen} onOpenChange={setProjectPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={projectPopoverOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {projectId ? (
                     <span className="flex items-center gap-2">
                       <span
-                        className="w-2 h-2 rounded-full inline-block"
-                        style={{ backgroundColor: p.color }}
+                        className="w-2 h-2 rounded-full inline-block shrink-0"
+                        style={{ backgroundColor: projects.find((p) => p.id === projectId)?.color }}
                       />
-                      {p.name}
+                      {projects.find((p) => p.id === projectId)?.name}
                     </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  ) : (
+                    <span className="text-muted-foreground">Select or create a project</span>
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command shouldFilter={true}>
+                  <CommandInput
+                    placeholder="Search or type to create…"
+                    value={projectSearch}
+                    onValueChange={setProjectSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty className="p-0" />
+                    <CommandGroup>
+                      {projects.map((p) => (
+                        <CommandItem
+                          key={p.id}
+                          value={p.name}
+                          onSelect={() => {
+                            setProjectId(p.id);
+                            setProjectPopoverOpen(false);
+                            setProjectSearch("");
+                          }}
+                        >
+                          <span className="flex items-center gap-2 flex-1">
+                            <span
+                              className="w-2 h-2 rounded-full inline-block shrink-0"
+                              style={{ backgroundColor: p.color }}
+                            />
+                            {p.name}
+                          </span>
+                          <Check
+                            className={cn(
+                              "h-4 w-4 shrink-0",
+                              projectId === p.id ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                    {projectSearch.trim() &&
+                      !projects.some((p) => p.name.toLowerCase() === projectSearch.trim().toLowerCase()) && (
+                        <CommandGroup>
+                          <CommandItem
+                            value={`__create__${projectSearch.trim()}`}
+                            onSelect={() => {
+                              const name = projectSearch.trim();
+                              const color = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
+                              const newProject = onCreateProject({ name, color, description: "" });
+                              setProjectId(newProject.id);
+                              setProjectPopoverOpen(false);
+                              setProjectSearch("");
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-2 shrink-0" />
+                            Create "{projectSearch.trim()}"
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {error && (
