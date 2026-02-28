@@ -1,8 +1,14 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Team, Member, Project, Assignment } from "@/lib/types";
 import {
-  Granularity, getTimelineColumns, isWeekend, isTodayInColumn,
-  dateToString, columnWidthInDays, addDays, parseDate,
+  Granularity,
+  getTimelineColumns,
+  isWeekend,
+  isTodayInColumn,
+  dateToString,
+  columnWidthInDays,
+  addDays,
+  parseDate,
 } from "@/lib/dateUtils";
 import { assignLanes } from "@/lib/laneUtils";
 import TimelineHeader from "./TimelineHeader";
@@ -12,9 +18,20 @@ import ScheduleCsvDialog from "./ScheduleCsvDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  CalendarDays,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 interface Props {
   teams: Team[];
@@ -24,8 +41,14 @@ interface Props {
   addTeam: (t: Omit<Team, "id">) => Team;
   addMember: (m: Omit<Member, "id">) => Member;
   addProject: (p: Omit<Project, "id">) => Project;
-  addAssignment: (a: Omit<Assignment, "id">) => { success: boolean; conflicts: Assignment[] };
-  updateAssignment: (id: string, data: Partial<Assignment>) => { success: boolean; conflicts: Assignment[] };
+  addAssignment: (a: Omit<Assignment, "id">) => {
+    success: boolean;
+    conflicts: Assignment[];
+  };
+  updateAssignment: (
+    id: string,
+    data: Partial<Assignment>,
+  ) => { success: boolean; conflicts: Assignment[] };
   deleteAssignment: (id: string) => void;
 }
 
@@ -36,13 +59,19 @@ const LANE_GAP = 2;
 const MIN_ROW_HEIGHT = 40;
 
 function getRowHeight(laneCount: number): number {
-  return Math.max(laneCount * (LANE_HEIGHT + LANE_GAP) + LANE_GAP, MIN_ROW_HEIGHT);
+  return Math.max(
+    laneCount * (LANE_HEIGHT + LANE_GAP) + LANE_GAP,
+    MIN_ROW_HEIGHT,
+  );
 }
 
-const ZOOM_LEVELS: Record<Granularity, { min: number; max: number; default: number; step: number }> = {
-  day:     { min: 20, max: 60,  default: 36,  step: 4 },
-  week:    { min: 30, max: 100, default: 60,  step: 10 },
-  month:   { min: 40, max: 160, default: 80,  step: 15 },
+const ZOOM_LEVELS: Record<
+  Granularity,
+  { min: number; max: number; default: number; step: number }
+> = {
+  day: { min: 20, max: 60, default: 36, step: 4 },
+  week: { min: 30, max: 100, default: 60, step: 10 },
+  month: { min: 40, max: 160, default: 80, step: 15 },
   quarter: { min: 60, max: 240, default: 120, step: 20 },
 };
 
@@ -73,16 +102,27 @@ interface SwimlaneGroup {
 }
 
 export default function ScheduleView({
-  teams, members, projects, assignments,
-  addTeam, addMember, addProject,
-  addAssignment, updateAssignment, deleteAssignment,
+  teams,
+  members,
+  projects,
+  assignments,
+  addTeam,
+  addMember,
+  addProject,
+  addAssignment,
+  updateAssignment,
+  deleteAssignment,
 }: Props) {
   const [offset, setOffset] = useState(0);
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [groupBy, setGroupBy] = useState<GroupBy>("team");
   const [colWidth, setColWidth] = useState(ZOOM_LEVELS.day.default);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogDefaults, setDialogDefaults] = useState<{ memberId?: string; date?: string; endDate?: string }>({});
+  const [dialogDefaults, setDialogDefaults] = useState<{
+    memberId?: string;
+    date?: string;
+    endDate?: string;
+  }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -123,19 +163,26 @@ export default function ScheduleView({
   }, []);
 
   // Drag-to-select state
-  const [dragSelect, setDragSelect] = useState<{ rowId: string; startIdx: number; endIdx: number } | null>(null);
+  const [dragSelect, setDragSelect] = useState<{
+    rowId: string;
+    startIdx: number;
+    endIdx: number;
+  } | null>(null);
   const isDraggingRef = useRef(false);
 
   // Vertical drag reassign state
   const [dropTargetRowId, setDropTargetRowId] = useState<string | null>(null);
 
-  const handleReassign = useCallback((assignmentId: string, targetRowId: string) => {
-    if (groupBy === "project") {
-      updateAssignment(assignmentId, { projectId: targetRowId });
-    } else {
-      updateAssignment(assignmentId, { memberId: targetRowId });
-    }
-  }, [groupBy, updateAssignment]);
+  const handleReassign = useCallback(
+    (assignmentId: string, targetRowId: string) => {
+      if (groupBy === "project") {
+        updateAssignment(assignmentId, { projectId: targetRowId });
+      } else {
+        updateAssignment(assignmentId, { memberId: targetRowId });
+      }
+    },
+    [groupBy, updateAssignment],
+  );
 
   const handleDropTargetChange = useCallback((rowId: string | null) => {
     setDropTargetRowId(rowId);
@@ -143,7 +190,8 @@ export default function ScheduleView({
 
   // Compute min/max dates from all assignments
   const { dataMinDate, dataMaxDate } = useMemo(() => {
-    if (assignments.length === 0) return { dataMinDate: null, dataMaxDate: null };
+    if (assignments.length === 0)
+      return { dataMinDate: null, dataMaxDate: null };
     let min = parseDate(assignments[0].startDate);
     let max = parseDate(assignments[0].endDate);
     for (const a of assignments) {
@@ -160,9 +208,18 @@ export default function ScheduleView({
     [granularity, offset, dataMinDate, dataMaxDate],
   );
 
-  const getProject = useCallback((id: string) => projects.find((p) => p.id === id), [projects]);
-  const getMember = useCallback((id: string) => members.find((m) => m.id === id), [members]);
-  const getTeam = useCallback((id: string) => teams.find((t) => t.id === id), [teams]);
+  const getProject = useCallback(
+    (id: string) => projects.find((p) => p.id === id),
+    [projects],
+  );
+  const getMember = useCallback(
+    (id: string) => members.find((m) => m.id === id),
+    [members],
+  );
+  const getTeam = useCallback(
+    (id: string) => teams.find((t) => t.id === id),
+    [teams],
+  );
 
   // Build swimlane data based on groupBy mode
   const { groups, sidebarLabel } = useMemo(() => {
@@ -185,7 +242,9 @@ export default function ScheduleView({
         .filter((g) => g.rows.length > 0);
 
       // Add unassigned members (no team or invalid teamId)
-      const unassigned = members.filter((m) => !m.teamId || !teamIds.has(m.teamId));
+      const unassigned = members.filter(
+        (m) => !m.teamId || !teamIds.has(m.teamId),
+      );
       if (unassigned.length > 0) {
         g.push({
           id: "__unassigned",
@@ -207,13 +266,15 @@ export default function ScheduleView({
         id: m.id,
         assignments: assignments.filter((a) => a.memberId === m.id),
       }));
-      const g: SwimlaneGroup[] = [{
-        id: "__all_members",
-        label: "",
-        color: "",
-        count: members.length,
-        rows,
-      }];
+      const g: SwimlaneGroup[] = [
+        {
+          id: "__all_members",
+          label: "",
+          color: "",
+          count: members.length,
+          rows,
+        },
+      ];
       return { groups: g, sidebarLabel: "Member" };
     }
 
@@ -222,19 +283,24 @@ export default function ScheduleView({
       id: p.id,
       assignments: assignments.filter((a) => a.projectId === p.id),
     }));
-    const g: SwimlaneGroup[] = [{
-      id: "__all_projects",
-      label: "",
-      color: "",
-      count: projects.length,
-      rows,
-    }];
+    const g: SwimlaneGroup[] = [
+      {
+        id: "__all_projects",
+        label: "",
+        color: "",
+        count: projects.length,
+        rows,
+      },
+    ];
     return { groups: g, sidebarLabel: "Project" };
   }, [groupBy, teams, members, projects, assignments]);
 
   // Pre-compute lane info for every row
   const rowLaneData = useMemo(() => {
-    const map = new Map<string, { lanes: Map<string, number>; laneCount: number }>();
+    const map = new Map<
+      string,
+      { lanes: Map<string, number>; laneCount: number }
+    >();
     for (const group of groups) {
       for (const row of group.rows) {
         map.set(row.id, assignLanes(row.assignments));
@@ -243,11 +309,14 @@ export default function ScheduleView({
     return map;
   }, [groups]);
 
-  const handleCellMouseDown = useCallback((rowId: string, colIdx: number, e: React.MouseEvent) => {
-    if (e.button !== 0) return; // only left click
-    isDraggingRef.current = false;
-    setDragSelect({ rowId, startIdx: colIdx, endIdx: colIdx });
-  }, []);
+  const handleCellMouseDown = useCallback(
+    (rowId: string, colIdx: number, e: React.MouseEvent) => {
+      if (e.button !== 0) return; // only left click
+      isDraggingRef.current = false;
+      setDragSelect({ rowId, startIdx: colIdx, endIdx: colIdx });
+    },
+    [],
+  );
 
   const handleCellMouseEnter = useCallback((rowId: string, colIdx: number) => {
     setDragSelect((prev) => {
@@ -263,12 +332,22 @@ export default function ScheduleView({
     const maxIdx = Math.max(dragSelect.startIdx, dragSelect.endIdx);
     const startDay = columns[minIdx];
     // End date = last day of the last selected column
-    const endDay = addDays(columns[maxIdx], columnWidthInDays(granularity, columns[maxIdx]) - 1);
+    const endDay = addDays(
+      columns[maxIdx],
+      columnWidthInDays(granularity, columns[maxIdx]) - 1,
+    );
 
     if (groupBy === "project") {
-      setDialogDefaults({ date: dateToString(startDay), endDate: dateToString(endDay) });
+      setDialogDefaults({
+        date: dateToString(startDay),
+        endDate: dateToString(endDay),
+      });
     } else {
-      setDialogDefaults({ memberId: dragSelect.rowId, date: dateToString(startDay), endDate: dateToString(endDay) });
+      setDialogDefaults({
+        memberId: dragSelect.rowId,
+        date: dateToString(startDay),
+        endDate: dateToString(endDay),
+      });
     }
     setDialogOpen(true);
     setDragSelect(null);
@@ -283,10 +362,14 @@ export default function ScheduleView({
   };
 
   const zoomIn = () => {
-    setColWidth((w) => Math.min(w + ZOOM_LEVELS[granularity].step, ZOOM_LEVELS[granularity].max));
+    setColWidth((w) =>
+      Math.min(w + ZOOM_LEVELS[granularity].step, ZOOM_LEVELS[granularity].max),
+    );
   };
   const zoomOut = () => {
-    setColWidth((w) => Math.max(w - ZOOM_LEVELS[granularity].step, ZOOM_LEVELS[granularity].min));
+    setColWidth((w) =>
+      Math.max(w - ZOOM_LEVELS[granularity].step, ZOOM_LEVELS[granularity].min),
+    );
   };
 
   const totalWidth = columns.length * colWidth;
@@ -300,11 +383,19 @@ export default function ScheduleView({
       const proj = getProject(row.id);
       if (!proj) return null;
       return (
-        <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: rowHeight }}>
-          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: proj.color }} />
+        <div
+          className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors"
+          style={{ height: rowHeight }}
+        >
+          <div
+            className="w-3 h-3 rounded-full shrink-0"
+            style={{ backgroundColor: proj.color }}
+          />
           <div className="min-w-0">
             <p className="text-xs font-medium truncate">{proj.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{proj.description}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {proj.description}
+            </p>
           </div>
         </div>
       );
@@ -313,43 +404,57 @@ export default function ScheduleView({
     if (!member) return null;
     const team = getTeam(member.teamId);
     return (
-      <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: rowHeight }}>
+      <div
+        className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors"
+        style={{ height: rowHeight }}
+      >
         <div
           className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
           style={{ backgroundColor: team?.color ?? "#94a3b8" }}
         >
-          {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+          {member.name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .slice(0, 2)}
         </div>
         <div className="min-w-0">
           <p className="text-xs font-medium truncate">{member.name}</p>
           <p className="text-[10px] text-muted-foreground truncate">
-            {groupBy === "member" && team ? `${team.name} · ` : ""}{member.role}
+            {groupBy === "member" && team ? `${team.name} · ` : ""}
+            {member.role}
           </p>
         </div>
       </div>
     );
   };
 
-  const getBarInfo = useCallback((assignment: Assignment): { color: string; label: string } => {
-    if (groupBy === "project") {
-      const member = getMember(assignment.memberId);
-      const team = getTeam(member?.teamId ?? "");
+  const getBarInfo = useCallback(
+    (assignment: Assignment): { color: string; label: string } => {
+      if (groupBy === "project") {
+        const member = getMember(assignment.memberId);
+        const team = getTeam(member?.teamId ?? "");
+        return {
+          color: team?.color ?? "#94a3b8",
+          label: member?.name ?? "Unknown",
+        };
+      }
+      const proj = getProject(assignment.projectId);
       return {
-        color: team?.color ?? "#94a3b8",
-        label: member?.name ?? "Unknown",
+        color: proj?.color ?? "#94a3b8",
+        label: proj?.name ?? "Unknown",
       };
-    }
-    const proj = getProject(assignment.projectId);
-    return {
-      color: proj?.color ?? "#94a3b8",
-      label: proj?.name ?? "Unknown",
-    };
-  }, [groupBy, getProject, getMember, getTeam]);
+    },
+    [groupBy, getProject, getMember, getTeam],
+  );
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div ref={toolbarRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-14 z-30 bg-background py-3 -mt-3">
+      <div
+        ref={toolbarRef}
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-14 z-30 bg-background py-3 -mt-3"
+      >
         <div>
           <h2 className="text-xl font-semibold text-foreground">Schedule</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -357,13 +462,18 @@ export default function ScheduleView({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
+          <Select
+            value={groupBy}
+            onValueChange={(v) => setGroupBy(v as GroupBy)}
+          >
             <SelectTrigger className="h-8 w-[120px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {(Object.keys(GROUP_BY_LABELS) as GroupBy[]).map((g) => (
-                <SelectItem key={g} value={g}>{GROUP_BY_LABELS[g]}</SelectItem>
+                <SelectItem key={g} value={g}>
+                  {GROUP_BY_LABELS[g]}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -374,29 +484,58 @@ export default function ScheduleView({
             </SelectTrigger>
             <SelectContent>
               {(Object.keys(GRANULARITY_LABELS) as Granularity[]).map((g) => (
-                <SelectItem key={g} value={g}>{GRANULARITY_LABELS[g]}</SelectItem>
+                <SelectItem key={g} value={g}>
+                  {GRANULARITY_LABELS[g]}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
           <div className="flex items-center border rounded-md">
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-r-none" onClick={zoomOut} disabled={colWidth <= ZOOM_LEVELS[granularity].min}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-r-none"
+              onClick={zoomOut}
+              disabled={colWidth <= ZOOM_LEVELS[granularity].min}
+            >
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <div className="h-8 w-px bg-border" />
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-l-none" onClick={zoomIn} disabled={colWidth >= ZOOM_LEVELS[granularity].max}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-l-none"
+              onClick={zoomIn}
+              disabled={colWidth >= ZOOM_LEVELS[granularity].max}
+            >
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
           </div>
 
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setOffset((o) => o - navStep)}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setOffset((o) => o - navStep)}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setOffset(0)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setOffset(0)}
+            >
               Today
             </Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setOffset((o) => o + navStep)}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setOffset((o) => o + navStep)}
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -412,7 +551,14 @@ export default function ScheduleView({
             addAssignment={addAssignment}
           />
 
-          <Button size="sm" className="h-8" onClick={() => { setDialogDefaults({}); setDialogOpen(true); }}>
+          <Button
+            size="sm"
+            className="h-8"
+            onClick={() => {
+              setDialogDefaults({});
+              setDialogOpen(true);
+            }}
+          >
             <Plus className="h-4 w-4 mr-1" /> Assign
           </Button>
         </div>
@@ -421,14 +567,27 @@ export default function ScheduleView({
       {/* Gantt Chart */}
       <div className="border rounded-lg bg-card">
         {/* Sticky date header */}
-        <div className="sticky z-20 bg-card rounded-t-lg border-b" style={{ top: dateHeaderTop }}>
+        <div
+          className="sticky z-20 bg-card rounded-t-lg border-b"
+          style={{ top: dateHeaderTop }}
+        >
           <div className="flex">
             <div className="shrink-0 w-48 border-r bg-muted/30 flex items-end px-3 pb-1.5 h-[60px]">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{sidebarLabel}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {sidebarLabel}
+              </span>
             </div>
-            <div ref={headerScrollRef} className="overflow-hidden flex-1" onScroll={handleHeaderScroll}>
+            <div
+              ref={headerScrollRef}
+              className="overflow-hidden flex-1"
+              onScroll={handleHeaderScroll}
+            >
               <div style={{ width: totalWidth, minWidth: totalWidth }}>
-                <TimelineHeader columns={columns} colWidth={colWidth} granularity={granularity} />
+                <TimelineHeader
+                  columns={columns}
+                  colWidth={colWidth}
+                  granularity={granularity}
+                />
               </div>
             </div>
           </div>
@@ -442,9 +601,19 @@ export default function ScheduleView({
               <div key={group.id}>
                 {group.label && (
                   <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.color }} />
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.label}</span>
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{group.count}</Badge>
+                    <div
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: group.color }}
+                    />
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {group.label}
+                    </span>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] h-4 px-1.5"
+                    >
+                      {group.count}
+                    </Badge>
                   </div>
                 )}
                 {group.rows.map((row) => (
@@ -455,11 +624,20 @@ export default function ScheduleView({
           </div>
 
           {/* Right scrollable timeline body */}
-          <div ref={scrollRef} className="overflow-x-auto flex-1" onScroll={handleBodyScroll}>
+          <div
+            ref={scrollRef}
+            className="overflow-x-auto flex-1"
+            onScroll={handleBodyScroll}
+          >
             <div style={{ width: totalWidth, minWidth: totalWidth }}>
               {groups.map((group) => (
                 <div key={group.id}>
-                  {group.label && <div className="bg-muted/40 border-b" style={{ height: 'calc(1rem + 1px + (0.5rem * 2))' }} />}
+                  {group.label && (
+                    <div
+                      className="bg-muted/40 border-b"
+                      style={{ height: "calc(1rem + 1px + (0.5rem * 2))" }}
+                    />
+                  )}
                   {group.rows.map((row) => {
                     const laneData = rowLaneData.get(row.id);
                     const laneMap = laneData?.lanes ?? new Map();
@@ -467,15 +645,31 @@ export default function ScheduleView({
                     const rowHeight = getRowHeight(laneCount);
 
                     return (
-                      <div key={row.id} data-row-id={row.id} className={`relative border-b transition-colors ${dropTargetRowId === row.id ? "bg-primary/10 ring-1 ring-inset ring-primary/30" : ""}`} style={{ height: rowHeight }}>
+                      <div
+                        key={row.id}
+                        data-row-id={row.id}
+                        className={`relative border-b transition-colors ${dropTargetRowId === row.id ? "bg-primary/10 ring-1 ring-inset ring-primary/30" : ""}`}
+                        style={{ height: rowHeight }}
+                      >
                         {/* Column cells background */}
                         <div className="absolute inset-0 flex">
                           {columns.map((col, i) => {
-                            const weekend = granularity === "day" && isWeekend(col);
+                            const weekend =
+                              granularity === "day" && isWeekend(col);
                             const today = isTodayInColumn(col, granularity);
-                            const isSelected = dragSelect && dragSelect.rowId === row.id &&
-                              i >= Math.min(dragSelect.startIdx, dragSelect.endIdx) &&
-                              i <= Math.max(dragSelect.startIdx, dragSelect.endIdx);
+                            const isSelected =
+                              dragSelect &&
+                              dragSelect.rowId === row.id &&
+                              i >=
+                                Math.min(
+                                  dragSelect.startIdx,
+                                  dragSelect.endIdx,
+                                ) &&
+                              i <=
+                                Math.max(
+                                  dragSelect.startIdx,
+                                  dragSelect.endIdx,
+                                );
                             return (
                               <div
                                 key={i}
@@ -485,8 +679,12 @@ export default function ScheduleView({
                                   ${isSelected ? "!bg-primary/20" : "hover:bg-primary/5"}
                                 `}
                                 style={{ width: colWidth, minWidth: colWidth }}
-                                onMouseDown={(e) => handleCellMouseDown(row.id, i, e)}
-                                onMouseEnter={() => handleCellMouseEnter(row.id, i)}
+                                onMouseDown={(e) =>
+                                  handleCellMouseDown(row.id, i, e)
+                                }
+                                onMouseEnter={() =>
+                                  handleCellMouseEnter(row.id, i)
+                                }
                                 onMouseUp={handleCellMouseUp}
                               />
                             );
@@ -527,7 +725,8 @@ export default function ScheduleView({
       {/* Legend */}
       <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm bg-primary/10 border border-primary/30" /> Today
+          <span className="w-3 h-3 rounded-sm bg-primary/10 border border-primary/30" />{" "}
+          Today
         </span>
         {granularity === "day" && (
           <span className="flex items-center gap-1.5">
@@ -538,7 +737,13 @@ export default function ScheduleView({
           <CalendarDays className="h-3 w-3" /> Click or drag cells to assign
         </span>
         <span className="ml-auto text-muted-foreground/60">
-          Zoom: {Math.round(((colWidth - ZOOM_LEVELS[granularity].min) / (ZOOM_LEVELS[granularity].max - ZOOM_LEVELS[granularity].min)) * 100)}%
+          Zoom:{" "}
+          {Math.round(
+            ((colWidth - ZOOM_LEVELS[granularity].min) /
+              (ZOOM_LEVELS[granularity].max - ZOOM_LEVELS[granularity].min)) *
+              100,
+          )}
+          %
         </span>
       </div>
 

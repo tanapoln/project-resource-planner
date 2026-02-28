@@ -4,10 +4,19 @@ import { findConflicts } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
 } from "@/components/ui/select";
 import { AlertTriangle } from "lucide-react";
 import { dateToString } from "@/lib/dateUtils";
@@ -19,10 +28,21 @@ interface Props {
   projects: Project[];
   teams: Team[];
   defaults: { memberId?: string; date?: string; endDate?: string };
-  onSave: (a: Omit<Assignment, "id">) => { success: boolean; conflicts: Assignment[] };
+  onSave: (a: Omit<Assignment, "id">) => {
+    success: boolean;
+    conflicts: Assignment[];
+  };
 }
 
-export default function AssignmentDialog({ open, onOpenChange, members, projects, teams, defaults, onSave }: Props) {
+export default function AssignmentDialog({
+  open,
+  onOpenChange,
+  members,
+  projects,
+  teams,
+  defaults,
+  onSave,
+}: Props) {
   const [memberId, setMemberId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -49,7 +69,11 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
   // Compute which members have conflicts for the current date range
   const { availableMembers, conflictedMembers, conflictMap } = useMemo(() => {
     if (!startDate || !endDate || startDate > endDate) {
-      return { availableMembers: members, conflictedMembers: [] as Member[], conflictMap: new Map<string, string>() };
+      return {
+        availableMembers: members,
+        conflictedMembers: [] as Member[],
+        conflictMap: new Map<string, string>(),
+      };
     }
     const available: Member[] = [];
     const conflicted: Member[] = [];
@@ -68,7 +92,11 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
         available.push(m);
       }
     }
-    return { availableMembers: available, conflictedMembers: conflicted, conflictMap: cMap };
+    return {
+      availableMembers: available,
+      conflictedMembers: conflicted,
+      conflictMap: cMap,
+    };
   }, [members, projects, startDate, endDate]);
 
   // If selected member becomes conflicted after date change, clear selection
@@ -94,7 +122,9 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
         const p = projects.find((pr) => pr.id === c.projectId);
         return p?.name ?? "Unknown";
       });
-      setError(`Schedule conflict! This member is already assigned to: ${conflictProjects.join(", ")} during this period.`);
+      setError(
+        `Schedule conflict! This member is already assigned to: ${conflictProjects.join(", ")} during this period.`,
+      );
       return;
     }
     onOpenChange(false);
@@ -112,19 +142,32 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
         <DialogHeader>
           <DialogTitle>Assign to Project</DialogTitle>
           <DialogDescription>
-            Schedule a team member to work on a project. Each person can only work on one project at a time.
+            Schedule a team member to work on a project. Each person can only
+            work on one project at a time.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {/* Date fields first so conflict info is computed before member selection */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Start Date</label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <label className="text-sm font-medium mb-1.5 block">
+                Start Date
+              </label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">End Date</label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <label className="text-sm font-medium mb-1.5 block">
+                End Date
+              </label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
             </div>
           </div>
           <div>
@@ -142,9 +185,10 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
                     </SelectItem>
                   );
                 })}
-                {conflictedMembers.length > 0 && availableMembers.length > 0 && (
-                  <div className="mx-1 my-1 h-px bg-border" />
-                )}
+                {conflictedMembers.length > 0 &&
+                  availableMembers.length > 0 && (
+                    <div className="mx-1 my-1 h-px bg-border" />
+                  )}
                 {conflictedMembers.map((m) => {
                   const team = getTeamForMember(m.id);
                   const conflictInfo = conflictMap.get(m.id) ?? "";
@@ -174,7 +218,10 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
                 {projects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
+                      <span
+                        className="w-2 h-2 rounded-full inline-block"
+                        style={{ backgroundColor: p.color }}
+                      />
                       {p.name}
                     </span>
                   </SelectItem>
@@ -191,7 +238,9 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={handleSave}>Assign</Button>
         </DialogFooter>
       </DialogContent>

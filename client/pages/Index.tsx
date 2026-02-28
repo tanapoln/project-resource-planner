@@ -19,10 +19,13 @@ export default function Index() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <LayoutGrid className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-base tracking-tight">ResourceHub</span>
+            <span className="font-semibold text-base tracking-tight">
+              ResourceHub
+            </span>
           </div>
           <div className="text-xs text-muted-foreground hidden sm:block">
-            {data.members.length} members &middot; {data.projects.length} projects &middot; {data.assignments.length} assignments
+            {data.members.length} members &middot; {data.projects.length}{" "}
+            projects &middot; {data.assignments.length} assignments
           </div>
         </div>
       </header>

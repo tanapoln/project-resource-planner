@@ -38,15 +38,48 @@ const DEFAULT_MEMBERS: Member[] = [
 ];
 
 const DEFAULT_PROJECTS: Project[] = [
-  { id: "p-1", name: "Website Redesign", color: "#8b5cf6", description: "Revamp the company website" },
-  { id: "p-2", name: "Mobile App v2", color: "#f59e0b", description: "Next major version of mobile app" },
-  { id: "p-3", name: "API Gateway", color: "#10b981", description: "Build the new API gateway service" },
+  {
+    id: "p-1",
+    name: "Website Redesign",
+    color: "#8b5cf6",
+    description: "Revamp the company website",
+  },
+  {
+    id: "p-2",
+    name: "Mobile App v2",
+    color: "#f59e0b",
+    description: "Next major version of mobile app",
+  },
+  {
+    id: "p-3",
+    name: "API Gateway",
+    color: "#10b981",
+    description: "Build the new API gateway service",
+  },
 ];
 
 const DEFAULT_ASSIGNMENTS: Assignment[] = [
-  { id: "a-1", memberId: "m-1", projectId: "p-1", startDate: getRelativeDate(0), endDate: getRelativeDate(14) },
-  { id: "a-2", memberId: "m-3", projectId: "p-3", startDate: getRelativeDate(2), endDate: getRelativeDate(20) },
-  { id: "a-3", memberId: "m-5", projectId: "p-1", startDate: getRelativeDate(0), endDate: getRelativeDate(10) },
+  {
+    id: "a-1",
+    memberId: "m-1",
+    projectId: "p-1",
+    startDate: getRelativeDate(0),
+    endDate: getRelativeDate(14),
+  },
+  {
+    id: "a-2",
+    memberId: "m-3",
+    projectId: "p-3",
+    startDate: getRelativeDate(2),
+    endDate: getRelativeDate(20),
+  },
+  {
+    id: "a-3",
+    memberId: "m-5",
+    projectId: "p-1",
+    startDate: getRelativeDate(0),
+    endDate: getRelativeDate(10),
+  },
 ];
 
 function getRelativeDate(daysFromNow: number): string {
@@ -93,7 +126,7 @@ export function findConflicts(
   memberId: string,
   startDate: string,
   endDate: string,
-  excludeAssignmentId?: string
+  excludeAssignmentId?: string,
 ): Assignment[] {
   const assignments = getAssignments();
   return assignments.filter((a) => {

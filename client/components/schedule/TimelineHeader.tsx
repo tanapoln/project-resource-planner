@@ -1,5 +1,12 @@
 import { useMemo } from "react";
-import { Granularity, formatColumnLabel, formatGroupLabel, isWeekend, isTodayInColumn, columnWidthInDays } from "@/lib/dateUtils";
+import {
+  Granularity,
+  formatColumnLabel,
+  formatGroupLabel,
+  isWeekend,
+  isTodayInColumn,
+  columnWidthInDays,
+} from "@/lib/dateUtils";
 
 interface Props {
   columns: Date[];
@@ -7,7 +14,11 @@ interface Props {
   granularity: Granularity;
 }
 
-export default function TimelineHeader({ columns, colWidth, granularity }: Props) {
+export default function TimelineHeader({
+  columns,
+  colWidth,
+  granularity,
+}: Props) {
   // Group columns by their group label (month for day/week, year for month/quarter)
   const groups = useMemo(() => {
     const result: { label: string; span: number }[] = [];

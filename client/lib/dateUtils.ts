@@ -1,8 +1,27 @@
-import { format, addDays, addWeeks, addMonths, addQuarters, differenceInDays, differenceInWeeks, differenceInMonths, differenceInQuarters, startOfWeek, startOfMonth, startOfQuarter, eachDayOfInterval, isSameMonth } from "date-fns";
+import {
+  format,
+  addDays,
+  addWeeks,
+  addMonths,
+  addQuarters,
+  differenceInDays,
+  differenceInWeeks,
+  differenceInMonths,
+  differenceInQuarters,
+  startOfWeek,
+  startOfMonth,
+  startOfQuarter,
+  eachDayOfInterval,
+  isSameMonth,
+} from "date-fns";
 
 export type Granularity = "day" | "week" | "month" | "quarter";
 
-export function getTimelineRange(weeksToShow = 6): { start: Date; end: Date; days: Date[] } {
+export function getTimelineRange(weeksToShow = 6): {
+  start: Date;
+  end: Date;
+  days: Date[];
+} {
   const today = new Date();
   const start = startOfWeek(addDays(today, -7), { weekStartsOn: 1 });
   const end = addDays(start, weeksToShow * 7 - 1);
@@ -58,8 +77,10 @@ export function getTimelineColumns(
 
   // Rule 1: extend to cover all assignment dates
   if (dataMinDate && dataMinDate < rangeStart) {
-    if (granularity === "day") rangeStart = startOfWeek(dataMinDate, { weekStartsOn: 1 });
-    else if (granularity === "week") rangeStart = startOfWeek(dataMinDate, { weekStartsOn: 1 });
+    if (granularity === "day")
+      rangeStart = startOfWeek(dataMinDate, { weekStartsOn: 1 });
+    else if (granularity === "week")
+      rangeStart = startOfWeek(dataMinDate, { weekStartsOn: 1 });
     else if (granularity === "month") rangeStart = startOfMonth(dataMinDate);
     else rangeStart = startOfQuarter(dataMinDate);
   }
@@ -109,7 +130,10 @@ export function getTimelineColumns(
 }
 
 /** Get the width of one column in days, for positioning bars */
-export function columnWidthInDays(granularity: Granularity, colDate: Date): number {
+export function columnWidthInDays(
+  granularity: Granularity,
+  colDate: Date,
+): number {
   if (granularity === "day") return 1;
   if (granularity === "week") return 7;
   if (granularity === "month") {
@@ -122,7 +146,10 @@ export function columnWidthInDays(granularity: Granularity, colDate: Date): numb
 }
 
 /** Format column label based on granularity */
-export function formatColumnLabel(date: Date, granularity: Granularity): string {
+export function formatColumnLabel(
+  date: Date,
+  granularity: Granularity,
+): string {
   if (granularity === "day") return format(date, "d");
   if (granularity === "week") return `W${format(date, "w")}`;
   if (granularity === "month") return format(date, "MMM");
@@ -148,7 +175,10 @@ export function getBarPosition(
   const timelineStart = columns[0];
   // Total days the timeline spans
   const lastCol = columns[columns.length - 1];
-  const timelineEndDate = addDays(lastCol, columnWidthInDays(granularity, lastCol));
+  const timelineEndDate = addDays(
+    lastCol,
+    columnWidthInDays(granularity, lastCol),
+  );
   const totalTimelineDays = differenceInDays(timelineEndDate, timelineStart);
   const totalTimelineWidth = columns.length * colWidth;
   const pixelsPerDay = totalTimelineWidth / totalTimelineDays;
