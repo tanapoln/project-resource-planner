@@ -1,18 +1,19 @@
 import { useMemo } from "react";
-import { formatDay, formatMonth, isWeekend, isToday, isSameMonth } from "@/lib/dateUtils";
+import { Granularity, formatColumnLabel, formatGroupLabel, isWeekend, isTodayInColumn, columnWidthInDays } from "@/lib/dateUtils";
 
 interface Props {
-  days: Date[];
-  dayWidth: number;
+  columns: Date[];
+  colWidth: number;
+  granularity: Granularity;
 }
 
-export default function TimelineHeader({ days, dayWidth }: Props) {
-  // Group days into months
-  const months = useMemo(() => {
+export default function TimelineHeader({ columns, colWidth, granularity }: Props) {
+  // Group columns by their group label (month for day/week, year for month/quarter)
+  const groups = useMemo(() => {
     const result: { label: string; span: number }[] = [];
-    let current = { label: formatMonth(days[0]), span: 0 };
-    for (const day of days) {
-      const label = formatMonth(day);
+    let current = { label: formatGroupLabel(columns[0], granularity), span: 0 };
+    for (const col of columns) {
+      const label = formatGroupLabel(col, granularity);
       if (label === current.label) {
         current.span++;
       } else {
@@ -22,27 +23,27 @@ export default function TimelineHeader({ days, dayWidth }: Props) {
     }
     result.push(current);
     return result;
-  }, [days]);
+  }, [columns, granularity]);
 
   return (
     <div className="sticky top-0 z-20 bg-card border-b">
-      {/* Month row */}
+      {/* Group row (month/year) */}
       <div className="flex border-b">
-        {months.map((m, i) => (
+        {groups.map((g, i) => (
           <div
             key={i}
             className="text-xs font-semibold text-muted-foreground px-2 py-1.5 border-r last:border-r-0 truncate"
-            style={{ width: m.span * dayWidth, minWidth: m.span * dayWidth }}
+            style={{ width: g.span * colWidth, minWidth: g.span * colWidth }}
           >
-            {m.label}
+            {g.label}
           </div>
         ))}
       </div>
-      {/* Day row */}
+      {/* Column labels row */}
       <div className="flex">
-        {days.map((day, i) => {
-          const weekend = isWeekend(day);
-          const today = isToday(day);
+        {columns.map((col, i) => {
+          const weekend = granularity === "day" && isWeekend(col);
+          const today = isTodayInColumn(col, granularity);
           return (
             <div
               key={i}
@@ -50,9 +51,9 @@ export default function TimelineHeader({ days, dayWidth }: Props) {
                 ${weekend ? "bg-muted/50 text-muted-foreground/60" : "text-muted-foreground"}
                 ${today ? "bg-primary/10 font-bold text-primary" : ""}
               `}
-              style={{ width: dayWidth, minWidth: dayWidth }}
+              style={{ width: colWidth, minWidth: colWidth }}
             >
-              <span>{formatDay(day)}</span>
+              <span>{formatColumnLabel(col, granularity)}</span>
             </div>
           );
         })}

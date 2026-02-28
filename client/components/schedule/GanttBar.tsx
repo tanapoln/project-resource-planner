@@ -1,32 +1,34 @@
 import { useRef, useState, useCallback } from "react";
 import { Assignment, Project } from "@/lib/types";
-import { parseDate, dateToString, addDays, differenceInDays } from "@/lib/dateUtils";
+import { parseDate, dateToString, addDays, differenceInDays, Granularity, getBarPosition } from "@/lib/dateUtils";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 
 interface Props {
   assignment: Assignment;
   project: Project;
-  timelineStart: Date;
-  dayWidth: number;
+  columns: Date[];
+  colWidth: number;
+  granularity: Granularity;
   onUpdate: (id: string, data: Partial<Assignment>) => { success: boolean; conflicts: Assignment[] };
   onDelete: (id: string) => void;
 }
 
 type DragMode = "move" | "resize-left" | "resize-right" | null;
 
-export default function GanttBar({ assignment, project, timelineStart, dayWidth, onUpdate, onDelete }: Props) {
+export default function GanttBar({ assignment, project, columns, colWidth, granularity, onUpdate, onDelete }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
   const [conflict, setConflict] = useState(false);
-  const dragState = useRef({ startX: 0, origLeft: 0, origWidth: 0, origStartDate: "", origEndDate: "" });
+  const dragState = useRef({ startX: 0, origStartDate: "", origEndDate: "" });
 
   const startDate = parseDate(assignment.startDate);
   const endDate = parseDate(assignment.endDate);
-  const offsetDays = differenceInDays(startDate, timelineStart);
-  const durationDays = differenceInDays(endDate, startDate) + 1;
-  const left = offsetDays * dayWidth;
-  const width = durationDays * dayWidth;
+  const { left, width } = getBarPosition(startDate, endDate, columns, colWidth, granularity);
+
+  // Calculate pixels per day for drag snapping
+  const totalWidth = columns.length * colWidth;
+  const timelineStart = columns[0];
 
   const handleMouseDown = useCallback((e: React.MouseEvent, mode: DragMode) => {
     e.preventDefault();
@@ -35,15 +37,24 @@ export default function GanttBar({ assignment, project, timelineStart, dayWidth,
     setConflict(false);
     dragState.current = {
       startX: e.clientX,
-      origLeft: left,
-      origWidth: width,
       origStartDate: assignment.startDate,
       origEndDate: assignment.endDate,
     };
 
     const handleMouseMove = (ev: MouseEvent) => {
       const dx = ev.clientX - dragState.current.startX;
-      const daysDelta = Math.round(dx / dayWidth);
+      // Snap to days regardless of granularity
+      const { left: barLeft, width: barWidth } = getBarPosition(
+        parseDate(dragState.current.origStartDate),
+        parseDate(dragState.current.origEndDate),
+        columns,
+        colWidth,
+        granularity,
+      );
+      const durationDays = differenceInDays(parseDate(dragState.current.origEndDate), parseDate(dragState.current.origStartDate));
+      // Approximate days from pixel delta
+      const pixelsPerDay = barWidth / (durationDays + 1);
+      const daysDelta = Math.round(dx / Math.max(pixelsPerDay, 4));
       if (daysDelta === 0) return;
 
       let newStart = dragState.current.origStartDate;
@@ -67,7 +78,6 @@ export default function GanttBar({ assignment, project, timelineStart, dayWidth,
       const result = onUpdate(assignment.id, { startDate: newStart, endDate: newEnd });
       if (!result.success) {
         setConflict(true);
-        // Revert
         onUpdate(assignment.id, { startDate: dragState.current.origStartDate, endDate: dragState.current.origEndDate });
       } else {
         setConflict(false);
@@ -83,7 +93,9 @@ export default function GanttBar({ assignment, project, timelineStart, dayWidth,
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
-  }, [assignment, dayWidth, left, width, onUpdate]);
+  }, [assignment, columns, colWidth, granularity, onUpdate]);
+
+  const durationDays = differenceInDays(endDate, startDate) + 1;
 
   return (
     <Tooltip>
@@ -96,7 +108,7 @@ export default function GanttBar({ assignment, project, timelineStart, dayWidth,
           `}
           style={{
             left,
-            width: Math.max(width, dayWidth),
+            width: Math.max(width, 8),
             backgroundColor: project.color,
           }}
           onMouseDown={(e) => handleMouseDown(e, "move")}
@@ -111,8 +123,8 @@ export default function GanttBar({ assignment, project, timelineStart, dayWidth,
             onMouseDown={(e) => handleMouseDown(e, "resize-left")}
           />
           {/* Label */}
-          <span className="text-[11px] font-medium text-white truncate px-3 pointer-events-none">
-            {project.name}
+          <span className="text-[11px] font-medium text-white truncate px-2 pointer-events-none">
+            {width > 40 ? project.name : ""}
           </span>
           {/* Right resize handle */}
           <div
