@@ -14,7 +14,10 @@ export function parseMemberCsv(text: string): CsvMemberRow[] {
 
   // Detect header row
   const headerLine = lines[0].toLowerCase();
-  const hasHeader = headerLine.includes("name") || headerLine.includes("role") || headerLine.includes("team");
+  const hasHeader =
+    headerLine.includes("name") ||
+    headerLine.includes("role") ||
+    headerLine.includes("team");
   const dataLines = hasHeader ? lines.slice(1) : lines;
 
   // Parse header to find column indices
@@ -57,7 +60,10 @@ export function parseProjectCsv(text: string): CsvProjectRow[] {
   if (lines.length === 0) return [];
 
   const headerLine = lines[0].toLowerCase();
-  const hasHeader = headerLine.includes("name") || headerLine.includes("description") || headerLine.includes("color");
+  const hasHeader =
+    headerLine.includes("name") ||
+    headerLine.includes("description") ||
+    headerLine.includes("color");
   const dataLines = hasHeader ? lines.slice(1) : lines;
 
   let nameIdx = 0;
@@ -100,10 +106,18 @@ export function parseScheduleCsv(text: string): CsvScheduleRow[] {
   if (lines.length === 0) return [];
 
   const headerLine = lines[0].toLowerCase();
-  const hasHeader = headerLine.includes("member") || headerLine.includes("project") || headerLine.includes("start");
+  const hasHeader =
+    headerLine.includes("member") ||
+    headerLine.includes("project") ||
+    headerLine.includes("start");
   const dataLines = hasHeader ? lines.slice(1) : lines;
 
-  let memberIdx = 0, teamIdx = 1, roleIdx = 2, projectIdx = 3, startIdx = 4, endIdx = 5;
+  let memberIdx = 0,
+    teamIdx = 1,
+    roleIdx = 2,
+    projectIdx = 3,
+    startIdx = 4,
+    endIdx = 5;
 
   if (hasHeader) {
     const headers = splitCsvLine(lines[0]).map((h) => h.toLowerCase().trim());
@@ -111,8 +125,12 @@ export function parseScheduleCsv(text: string): CsvScheduleRow[] {
     teamIdx = headers.findIndex((h) => h === "team");
     roleIdx = headers.findIndex((h) => h === "role");
     projectIdx = headers.findIndex((h) => h === "project");
-    startIdx = headers.findIndex((h) => h === "start date" || h === "startdate" || h === "start");
-    endIdx = headers.findIndex((h) => h === "end date" || h === "enddate" || h === "end");
+    startIdx = headers.findIndex(
+      (h) => h === "start date" || h === "startdate" || h === "start",
+    );
+    endIdx = headers.findIndex(
+      (h) => h === "end date" || h === "enddate" || h === "end",
+    );
     if (memberIdx === -1) memberIdx = 0;
     if (projectIdx === -1) projectIdx = 3;
     if (startIdx === -1) startIdx = 4;
