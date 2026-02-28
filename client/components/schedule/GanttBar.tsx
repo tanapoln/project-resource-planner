@@ -97,6 +97,13 @@ export default function GanttBar({ assignment, barColor, barLabel, columns, colW
 
   const durationDays = differenceInDays(endDate, startDate) + 1;
 
+  // Count working days (Mon-Fri)
+  let workingDays = 0;
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) workingDays++;
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -135,7 +142,7 @@ export default function GanttBar({ assignment, barColor, barLabel, columns, colW
       <TooltipContent side="top" className="text-xs">
         <p className="font-semibold">{barLabel}</p>
         <p>{format(startDate, "MMM d")} - {format(endDate, "MMM d, yyyy")}</p>
-        <p className="text-muted-foreground">{durationDays} day{durationDays !== 1 ? "s" : ""}</p>
+        <p className="text-muted-foreground">{durationDays} day{durationDays !== 1 ? "s" : ""} ({workingDays} working day{workingDays !== 1 ? "s" : ""})</p>
         {conflict && <p className="text-destructive font-medium mt-1">Schedule conflict!</p>}
         <p className="text-muted-foreground mt-1">Right-click to remove</p>
       </TooltipContent>
