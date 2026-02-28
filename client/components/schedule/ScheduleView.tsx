@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useCallback } from "react";
 import { Team, Member, Project, Assignment } from "@/lib/types";
 import {
   Granularity, getTimelineColumns, isWeekend, isTodayInColumn,
-  dateToString, getBarPosition, columnWidthInDays,
+  dateToString,
 } from "@/lib/dateUtils";
 import TimelineHeader from "./TimelineHeader";
 import GanttBar from "./GanttBar";
@@ -24,6 +24,8 @@ interface Props {
   deleteAssignment: (id: string) => void;
 }
 
+type GroupBy = "team" | "member" | "project";
+
 const ROW_HEIGHT = 40;
 
 const ZOOM_LEVELS: Record<Granularity, { min: number; max: number; default: number; step: number }> = {
@@ -40,12 +42,34 @@ const GRANULARITY_LABELS: Record<Granularity, string> = {
   quarter: "Quarter",
 };
 
+const GROUP_BY_LABELS: Record<GroupBy, string> = {
+  team: "By Team",
+  member: "By Member",
+  project: "By Project",
+};
+
+// Describes one row in the gantt chart
+interface SwimlaneRow {
+  id: string;
+  assignments: Assignment[];
+}
+
+// Describes a group (header + rows)
+interface SwimlaneGroup {
+  id: string;
+  label: string;
+  color: string;
+  count: number;
+  rows: SwimlaneRow[];
+}
+
 export default function ScheduleView({
   teams, members, projects, assignments,
   addAssignment, updateAssignment, deleteAssignment,
 }: Props) {
   const [offset, setOffset] = useState(0);
   const [granularity, setGranularity] = useState<Granularity>("day");
+  const [groupBy, setGroupBy] = useState<GroupBy>("team");
   const [colWidth, setColWidth] = useState(ZOOM_LEVELS.day.default);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDefaults, setDialogDefaults] = useState<{ memberId?: string; date?: string }>({});
@@ -56,27 +80,69 @@ export default function ScheduleView({
     [granularity, offset],
   );
 
-  const timelineStart = columns[0];
-
-  // Group members by team
-  const grouped = useMemo(() => {
-    return teams
-      .map((team) => ({
-        team,
-        members: members.filter((m) => m.teamId === team.id),
-      }))
-      .filter((g) => g.members.length > 0);
-  }, [teams, members]);
-
   const getProject = useCallback((id: string) => projects.find((p) => p.id === id), [projects]);
+  const getMember = useCallback((id: string) => members.find((m) => m.id === id), [members]);
+  const getTeam = useCallback((id: string) => teams.find((t) => t.id === id), [teams]);
 
-  const getMemberAssignments = useCallback(
-    (memberId: string) => assignments.filter((a) => a.memberId === memberId),
-    [assignments],
-  );
+  // Build swimlane data based on groupBy mode
+  const { groups, sidebarLabel } = useMemo(() => {
+    if (groupBy === "team") {
+      const g: SwimlaneGroup[] = teams
+        .map((team) => {
+          const teamMembers = members.filter((m) => m.teamId === team.id);
+          return {
+            id: team.id,
+            label: team.name,
+            color: team.color,
+            count: teamMembers.length,
+            rows: teamMembers.map((m) => ({
+              id: m.id,
+              assignments: assignments.filter((a) => a.memberId === m.id),
+            })),
+          };
+        })
+        .filter((g) => g.rows.length > 0);
+      return { groups: g, sidebarLabel: "Member" };
+    }
 
-  const handleCellClick = (memberId: string, day: Date) => {
-    setDialogDefaults({ memberId, date: dateToString(day) });
+    if (groupBy === "member") {
+      // Flat list: each row is a member, no grouping headers
+      const rows: SwimlaneRow[] = members.map((m) => ({
+        id: m.id,
+        assignments: assignments.filter((a) => a.memberId === m.id),
+      }));
+      const g: SwimlaneGroup[] = [{
+        id: "__all_members",
+        label: "",
+        color: "",
+        count: members.length,
+        rows,
+      }];
+      return { groups: g, sidebarLabel: "Member" };
+    }
+
+    // groupBy === "project"
+    const rows: SwimlaneRow[] = projects.map((p) => ({
+      id: p.id,
+      assignments: assignments.filter((a) => a.projectId === p.id),
+    }));
+    const g: SwimlaneGroup[] = [{
+      id: "__all_projects",
+      label: "",
+      color: "",
+      count: projects.length,
+      rows,
+    }];
+    return { groups: g, sidebarLabel: "Project" };
+  }, [groupBy, teams, members, projects, assignments]);
+
+  const handleCellClick = (rowId: string, day: Date) => {
+    if (groupBy === "project") {
+      // rowId is projectId — open dialog without member pre-filled
+      setDialogDefaults({ date: dateToString(day) });
+    } else {
+      setDialogDefaults({ memberId: rowId, date: dateToString(day) });
+    }
     setDialogOpen(true);
   };
 
@@ -90,14 +156,68 @@ export default function ScheduleView({
   const zoomIn = () => {
     setColWidth((w) => Math.min(w + ZOOM_LEVELS[granularity].step, ZOOM_LEVELS[granularity].max));
   };
-
   const zoomOut = () => {
     setColWidth((w) => Math.max(w - ZOOM_LEVELS[granularity].step, ZOOM_LEVELS[granularity].min));
   };
 
   const totalWidth = columns.length * colWidth;
-
   const navStep = granularity === "day" ? 2 : 1;
+
+  // Helpers to render sidebar row content
+  const renderSidebarRow = (row: SwimlaneRow) => {
+    if (groupBy === "project") {
+      const proj = getProject(row.id);
+      if (!proj) return null;
+      return (
+        <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: ROW_HEIGHT }}>
+          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: proj.color }} />
+          <div className="min-w-0">
+            <p className="text-xs font-medium truncate">{proj.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{proj.description}</p>
+          </div>
+        </div>
+      );
+    }
+    // member or team mode — row is a member
+    const member = getMember(row.id);
+    if (!member) return null;
+    const team = getTeam(member.teamId);
+    return (
+      <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: ROW_HEIGHT }}>
+        <div
+          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
+          style={{ backgroundColor: team?.color ?? "#94a3b8" }}
+        >
+          {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium truncate">{member.name}</p>
+          <p className="text-[10px] text-muted-foreground truncate">
+            {groupBy === "member" && team ? `${team.name} · ` : ""}{member.role}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // Determine bar color and label for each assignment based on groupBy
+  const getBarInfo = useCallback((assignment: Assignment): { color: string; label: string } => {
+    if (groupBy === "project") {
+      // Bars represent members
+      const member = getMember(assignment.memberId);
+      const team = getTeam(member?.teamId ?? "");
+      return {
+        color: team?.color ?? "#94a3b8",
+        label: member?.name ?? "Unknown",
+      };
+    }
+    // Bars represent projects
+    const proj = getProject(assignment.projectId);
+    return {
+      color: proj?.color ?? "#94a3b8",
+      label: proj?.name ?? "Unknown",
+    };
+  }, [groupBy, getProject, getMember, getTeam]);
 
   return (
     <div className="space-y-4">
@@ -110,6 +230,18 @@ export default function ScheduleView({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Group-by selector */}
+          <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
+            <SelectTrigger className="h-8 w-[120px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(GROUP_BY_LABELS) as GroupBy[]).map((g) => (
+                <SelectItem key={g} value={g}>{GROUP_BY_LABELS[g]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Granularity selector */}
           <Select value={granularity} onValueChange={handleGranularityChange}>
             <SelectTrigger className="h-8 w-[110px] text-xs">
@@ -124,23 +256,11 @@ export default function ScheduleView({
 
           {/* Zoom controls */}
           <div className="flex items-center border rounded-md">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-r-none"
-              onClick={zoomOut}
-              disabled={colWidth <= ZOOM_LEVELS[granularity].min}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-r-none" onClick={zoomOut} disabled={colWidth <= ZOOM_LEVELS[granularity].min}>
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <div className="h-8 w-px bg-border" />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-l-none"
-              onClick={zoomIn}
-              disabled={colWidth >= ZOOM_LEVELS[granularity].max}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-l-none" onClick={zoomIn} disabled={colWidth >= ZOOM_LEVELS[granularity].max}>
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -170,32 +290,20 @@ export default function ScheduleView({
           {/* Left sidebar */}
           <div className="shrink-0 w-48 border-r bg-card z-10">
             <div className="h-[58px] border-b bg-muted/30 flex items-end px-3 pb-1.5">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Member</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{sidebarLabel}</span>
             </div>
-            {grouped.map(({ team, members: teamMembers }) => (
-              <div key={team.id}>
-                <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: team.color }} />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{team.name}</span>
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{teamMembers.length}</Badge>
-                </div>
-                {teamMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors"
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
-                      style={{ backgroundColor: team.color }}
-                    >
-                      {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium truncate">{member.name}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{member.role}</p>
-                    </div>
+            {groups.map((group) => (
+              <div key={group.id}>
+                {/* Group header — only show if there's a label (team mode) */}
+                {group.label && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.color }} />
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.label}</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{group.count}</Badge>
                   </div>
+                )}
+                {group.rows.map((row) => (
+                  <div key={row.id}>{renderSidebarRow(row)}</div>
                 ))}
               </div>
             ))}
@@ -206,55 +314,48 @@ export default function ScheduleView({
             <div style={{ width: totalWidth, minWidth: totalWidth }}>
               <TimelineHeader columns={columns} colWidth={colWidth} granularity={granularity} />
 
-              {grouped.map(({ team, members: teamMembers }) => (
-                <div key={team.id}>
-                  <div className="bg-muted/40 border-b" style={{ height: 28 }} />
-                  {teamMembers.map((member) => {
-                    const memberAssignments = getMemberAssignments(member.id);
-                    return (
-                      <div
-                        key={member.id}
-                        className="relative border-b"
-                        style={{ height: ROW_HEIGHT }}
-                      >
-                        {/* Column cells background */}
-                        <div className="absolute inset-0 flex">
-                          {columns.map((col, i) => {
-                            const weekend = granularity === "day" && isWeekend(col);
-                            const today = isTodayInColumn(col, granularity);
-                            return (
-                              <div
-                                key={i}
-                                className={`border-r last:border-r-0 cursor-pointer hover:bg-primary/5 transition-colors
-                                  ${weekend ? "bg-muted/30" : ""}
-                                  ${today ? "bg-primary/10" : ""}
-                                `}
-                                style={{ width: colWidth, minWidth: colWidth }}
-                                onClick={() => handleCellClick(member.id, col)}
-                              />
-                            );
-                          })}
-                        </div>
-                        {/* Assignment bars */}
-                        {memberAssignments.map((assignment) => {
-                          const proj = getProject(assignment.projectId);
-                          if (!proj) return null;
+              {groups.map((group) => (
+                <div key={group.id}>
+                  {group.label && <div className="bg-muted/40 border-b" style={{ height: 28 }} />}
+                  {group.rows.map((row) => (
+                    <div key={row.id} className="relative border-b" style={{ height: ROW_HEIGHT }}>
+                      {/* Column cells background */}
+                      <div className="absolute inset-0 flex">
+                        {columns.map((col, i) => {
+                          const weekend = granularity === "day" && isWeekend(col);
+                          const today = isTodayInColumn(col, granularity);
                           return (
-                            <GanttBar
-                              key={assignment.id}
-                              assignment={assignment}
-                              project={proj}
-                              columns={columns}
-                              colWidth={colWidth}
-                              granularity={granularity}
-                              onUpdate={updateAssignment}
-                              onDelete={deleteAssignment}
+                            <div
+                              key={i}
+                              className={`border-r last:border-r-0 cursor-pointer hover:bg-primary/5 transition-colors
+                                ${weekend ? "bg-muted/30" : ""}
+                                ${today ? "bg-primary/10" : ""}
+                              `}
+                              style={{ width: colWidth, minWidth: colWidth }}
+                              onClick={() => handleCellClick(row.id, col)}
                             />
                           );
                         })}
                       </div>
-                    );
-                  })}
+                      {/* Assignment bars */}
+                      {row.assignments.map((assignment) => {
+                        const barInfo = getBarInfo(assignment);
+                        return (
+                          <GanttBar
+                            key={assignment.id}
+                            assignment={assignment}
+                            barColor={barInfo.color}
+                            barLabel={barInfo.label}
+                            columns={columns}
+                            colWidth={colWidth}
+                            granularity={granularity}
+                            onUpdate={updateAssignment}
+                            onDelete={deleteAssignment}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

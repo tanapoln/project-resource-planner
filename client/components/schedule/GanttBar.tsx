@@ -1,12 +1,13 @@
 import { useRef, useState, useCallback } from "react";
-import { Assignment, Project } from "@/lib/types";
+import { Assignment } from "@/lib/types";
 import { parseDate, dateToString, addDays, differenceInDays, Granularity, getBarPosition } from "@/lib/dateUtils";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 
 interface Props {
   assignment: Assignment;
-  project: Project;
+  barColor: string;
+  barLabel: string;
   columns: Date[];
   colWidth: number;
   granularity: Granularity;
@@ -16,7 +17,7 @@ interface Props {
 
 type DragMode = "move" | "resize-left" | "resize-right" | null;
 
-export default function GanttBar({ assignment, project, columns, colWidth, granularity, onUpdate, onDelete }: Props) {
+export default function GanttBar({ assignment, barColor, barLabel, columns, colWidth, granularity, onUpdate, onDelete }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
   const [conflict, setConflict] = useState(false);
@@ -25,10 +26,6 @@ export default function GanttBar({ assignment, project, columns, colWidth, granu
   const startDate = parseDate(assignment.startDate);
   const endDate = parseDate(assignment.endDate);
   const { left, width } = getBarPosition(startDate, endDate, columns, colWidth, granularity);
-
-  // Calculate pixels per day for drag snapping
-  const totalWidth = columns.length * colWidth;
-  const timelineStart = columns[0];
 
   const handleMouseDown = useCallback((e: React.MouseEvent, mode: DragMode) => {
     e.preventDefault();
@@ -43,8 +40,7 @@ export default function GanttBar({ assignment, project, columns, colWidth, granu
 
     const handleMouseMove = (ev: MouseEvent) => {
       const dx = ev.clientX - dragState.current.startX;
-      // Snap to days regardless of granularity
-      const { left: barLeft, width: barWidth } = getBarPosition(
+      const { width: barWidth } = getBarPosition(
         parseDate(dragState.current.origStartDate),
         parseDate(dragState.current.origEndDate),
         columns,
@@ -52,7 +48,6 @@ export default function GanttBar({ assignment, project, columns, colWidth, granu
         granularity,
       );
       const durationDays = differenceInDays(parseDate(dragState.current.origEndDate), parseDate(dragState.current.origStartDate));
-      // Approximate days from pixel delta
       const pixelsPerDay = barWidth / (durationDays + 1);
       const daysDelta = Math.round(dx / Math.max(pixelsPerDay, 4));
       if (daysDelta === 0) return;
@@ -109,7 +104,7 @@ export default function GanttBar({ assignment, project, columns, colWidth, granu
           style={{
             left,
             width: Math.max(width, 8),
-            backgroundColor: project.color,
+            backgroundColor: barColor,
           }}
           onMouseDown={(e) => handleMouseDown(e, "move")}
           onContextMenu={(e) => {
@@ -117,16 +112,13 @@ export default function GanttBar({ assignment, project, columns, colWidth, granu
             onDelete(assignment.id);
           }}
         >
-          {/* Left resize handle */}
           <div
             className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/20 rounded-l-md"
             onMouseDown={(e) => handleMouseDown(e, "resize-left")}
           />
-          {/* Label */}
           <span className="text-[11px] font-medium text-white truncate px-2 pointer-events-none">
-            {width > 40 ? project.name : ""}
+            {width > 40 ? barLabel : ""}
           </span>
-          {/* Right resize handle */}
           <div
             className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/20 rounded-r-md"
             onMouseDown={(e) => handleMouseDown(e, "resize-right")}
@@ -134,7 +126,7 @@ export default function GanttBar({ assignment, project, columns, colWidth, granu
         </div>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        <p className="font-semibold">{project.name}</p>
+        <p className="font-semibold">{barLabel}</p>
         <p>{format(startDate, "MMM d")} - {format(endDate, "MMM d, yyyy")}</p>
         <p className="text-muted-foreground">{durationDays} day{durationDays !== 1 ? "s" : ""}</p>
         {conflict && <p className="text-destructive font-medium mt-1">Schedule conflict!</p>}
