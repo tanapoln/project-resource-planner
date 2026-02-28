@@ -92,6 +92,7 @@ export default function ScheduleView({
   // Build swimlane data based on groupBy mode
   const { groups, sidebarLabel } = useMemo(() => {
     if (groupBy === "team") {
+      const teamIds = new Set(teams.map((t) => t.id));
       const g: SwimlaneGroup[] = teams
         .map((team) => {
           const teamMembers = members.filter((m) => m.teamId === team.id);
@@ -107,6 +108,22 @@ export default function ScheduleView({
           };
         })
         .filter((g) => g.rows.length > 0);
+
+      // Add unassigned members (no team or invalid teamId)
+      const unassigned = members.filter((m) => !m.teamId || !teamIds.has(m.teamId));
+      if (unassigned.length > 0) {
+        g.push({
+          id: "__unassigned",
+          label: "Unassigned",
+          color: "#94a3b8",
+          count: unassigned.length,
+          rows: unassigned.map((m) => ({
+            id: m.id,
+            assignments: assignments.filter((a) => a.memberId === m.id),
+          })),
+        });
+      }
+
       return { groups: g, sidebarLabel: "Member" };
     }
 
