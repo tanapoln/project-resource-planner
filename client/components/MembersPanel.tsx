@@ -10,7 +10,7 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Users, UserPlus, Upload, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, UserPlus, Upload, GripVertical, Download } from "lucide-react";
 
 interface Props {
   teams: Team[];
@@ -21,13 +21,14 @@ interface Props {
   addMember: (m: Omit<Member, "id">) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
   deleteMember: (id: string) => void;
+  reorderTeams: (teams: Team[]) => void;
 }
 
 const TEAM_COLORS = ["#6366f1", "#06b6d4", "#f43f5e", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899", "#14b8a6"];
 
 export default function MembersPanel({
   teams, members, addTeam, updateTeam, deleteTeam,
-  addMember, updateMember, deleteMember,
+  addMember, updateMember, deleteMember, reorderTeams,
 }: Props) {
   const [teamDialog, setTeamDialog] = useState(false);
   const [memberDialog, setMemberDialog] = useState(false);
@@ -38,9 +39,13 @@ export default function MembersPanel({
   const [csvFileName, setCsvFileName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Drag state
+  // Member drag state
   const [dragMemberId, setDragMemberId] = useState<string | null>(null);
   const [dropTargetTeamId, setDropTargetTeamId] = useState<string | null>(null);
+
+  // Team drag state
+  const [dragTeamId, setDragTeamId] = useState<string | null>(null);
+  const [dropTargetTeamIdx, setDropTargetTeamIdx] = useState<number | null>(null);
 
   // Team form state
   const [teamName, setTeamName] = useState("");
@@ -142,36 +147,75 @@ export default function MembersPanel({
     setCsvPreview([]);
   };
 
-  // --- Drag and Drop ---
-  const handleDragStart = useCallback((e: React.DragEvent, memberId: string) => {
+  // --- Member Drag and Drop (move between teams) ---
+  const handleMemberDragStart = useCallback((e: React.DragEvent, memberId: string) => {
     setDragMemberId(memberId);
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", memberId);
+    e.dataTransfer.setData("application/member-id", memberId);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, teamId: string) => {
+  const handleMemberDragOver = useCallback((e: React.DragEvent, teamId: string) => {
+    if (dragTeamId) return; // don't handle if dragging a team
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDropTargetTeamId(teamId);
-  }, []);
+  }, [dragTeamId]);
 
-  const handleDragLeave = useCallback(() => {
+  const handleMemberDragLeave = useCallback(() => {
     setDropTargetTeamId(null);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent, teamId: string) => {
+  const handleMemberDrop = useCallback((e: React.DragEvent, teamId: string) => {
+    if (dragTeamId) return; // don't handle if dragging a team
     e.preventDefault();
-    const memberId = e.dataTransfer.getData("text/plain");
+    const memberId = e.dataTransfer.getData("application/member-id");
     if (memberId) {
       updateMember(memberId, { teamId });
     }
     setDragMemberId(null);
     setDropTargetTeamId(null);
-  }, [updateMember]);
+  }, [updateMember, dragTeamId]);
 
-  const handleDragEnd = useCallback(() => {
+  const handleMemberDragEnd = useCallback(() => {
     setDragMemberId(null);
     setDropTargetTeamId(null);
+  }, []);
+
+  // --- Team Drag and Drop (reorder teams) ---
+  const handleTeamDragStart = useCallback((e: React.DragEvent, teamId: string) => {
+    setDragTeamId(teamId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("application/team-id", teamId);
+  }, []);
+
+  const handleTeamDragOver = useCallback((e: React.DragEvent, idx: number) => {
+    if (!dragTeamId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetTeamIdx(idx);
+  }, [dragTeamId]);
+
+  const handleTeamDragLeave = useCallback(() => {
+    setDropTargetTeamIdx(null);
+  }, []);
+
+  const handleTeamDrop = useCallback((e: React.DragEvent, targetIdx: number) => {
+    e.preventDefault();
+    const teamId = e.dataTransfer.getData("application/team-id");
+    if (!teamId) return;
+    const fromIdx = teams.findIndex((t) => t.id === teamId);
+    if (fromIdx === -1 || fromIdx === targetIdx) return;
+    const reordered = [...teams];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    reorderTeams(reordered);
+    setDragTeamId(null);
+    setDropTargetTeamIdx(null);
+  }, [teams, reorderTeams]);
+
+  const handleTeamDragEnd = useCallback(() => {
+    setDragTeamId(null);
+    setDropTargetTeamIdx(null);
   }, []);
 
   const membersByTeam = teams.map((t) => ({
@@ -198,6 +242,11 @@ export default function MembersPanel({
             className="hidden"
             onChange={handleFileSelect}
           />
+          <a href="/sample-members.csv" download="sample-members.csv" className="inline-flex">
+            <Button variant="outline" size="sm" type="button" asChild>
+              <span><Download className="h-4 w-4 mr-1" /> Sample CSV</span>
+            </Button>
+          </a>
           <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-4 w-4 mr-1" /> Import CSV
           </Button>
@@ -212,20 +261,39 @@ export default function MembersPanel({
 
       {/* Team groups */}
       <div className="space-y-4">
-        {membersByTeam.map(({ team, members: teamMembers }) => {
+        {membersByTeam.map(({ team, members: teamMembers }, teamIdx) => {
           const isDropTarget = dropTargetTeamId === team.id;
+          const isTeamDropTarget = dropTargetTeamIdx === teamIdx && dragTeamId !== null;
+          const isTeamDragging = dragTeamId === team.id;
           return (
             <div
               key={team.id}
               className={`bg-card rounded-lg border overflow-hidden transition-all ${
                 isDropTarget ? "ring-2 ring-primary border-primary shadow-md" : ""
+              } ${isTeamDropTarget ? "border-t-4 border-t-primary" : ""} ${
+                isTeamDragging ? "opacity-40" : ""
               }`}
-              onDragOver={(e) => handleDragOver(e, team.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, team.id)}
+              onDragOver={(e) => {
+                handleMemberDragOver(e, team.id);
+                handleTeamDragOver(e, teamIdx);
+              }}
+              onDragLeave={() => {
+                handleMemberDragLeave();
+                handleTeamDragLeave();
+              }}
+              onDrop={(e) => {
+                handleMemberDrop(e, team.id);
+                handleTeamDrop(e, teamIdx);
+              }}
             >
-              <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+              <div
+                className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 cursor-grab active:cursor-grabbing"
+                draggable
+                onDragStart={(e) => handleTeamDragStart(e, team.id)}
+                onDragEnd={handleTeamDragEnd}
+              >
                 <div className="flex items-center gap-2">
+                  <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: team.color }} />
                   <span className="font-medium text-sm">{team.name}</span>
                   <Badge variant="secondary" className="text-xs">{teamMembers.length}</Badge>
@@ -255,8 +323,8 @@ export default function MembersPanel({
                       isDragging={dragMemberId === member.id}
                       onEdit={() => openMemberDialog(member)}
                       onDelete={() => deleteMember(member.id)}
-                      onDragStart={(e) => handleDragStart(e, member.id)}
-                      onDragEnd={handleDragEnd}
+                      onDragStart={(e) => handleMemberDragStart(e, member.id)}
+                      onDragEnd={handleMemberDragEnd}
                     />
                   ))}
                 </div>
@@ -278,8 +346,8 @@ export default function MembersPanel({
                   isDragging={dragMemberId === member.id}
                   onEdit={() => openMemberDialog(member)}
                   onDelete={() => deleteMember(member.id)}
-                  onDragStart={(e) => handleDragStart(e, member.id)}
-                  onDragEnd={handleDragEnd}
+                  onDragStart={(e) => handleMemberDragStart(e, member.id)}
+                  onDragEnd={handleMemberDragEnd}
                 />
               ))}
             </div>

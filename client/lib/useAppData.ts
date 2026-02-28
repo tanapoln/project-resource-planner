@@ -30,6 +30,11 @@ export function useAppData() {
     setTeams((prev) => { const next = prev.filter((t) => t.id !== id); saveTeams(next); return next; });
   }, []);
 
+  const reorderTeams = useCallback((reordered: Team[]) => {
+    setTeams(reordered);
+    saveTeams(reordered);
+  }, []);
+
   // Members
   const addMember = useCallback((member: Omit<Member, "id">) => {
     const newMember = { ...member, id: generateId() };
@@ -89,7 +94,7 @@ export function useAppData() {
   }, []);
 
   return {
-    teams, addTeam, updateTeam, deleteTeam,
+    teams, addTeam, updateTeam, deleteTeam, reorderTeams,
     members, addMember, updateMember, deleteMember,
     projects, addProject, updateProject, deleteProject,
     assignments, addAssignment, updateAssignment, deleteAssignment,

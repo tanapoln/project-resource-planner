@@ -64,6 +64,7 @@ export default function Index() {
               addTeam={data.addTeam}
               updateTeam={data.updateTeam}
               deleteTeam={data.deleteTeam}
+              reorderTeams={data.reorderTeams}
               addMember={data.addMember}
               updateMember={data.updateMember}
               deleteMember={data.deleteMember}
