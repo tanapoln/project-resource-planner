@@ -15,6 +15,8 @@ interface Props {
   laneCount: number;
   onUpdate: (id: string, data: Partial<Assignment>) => { success: boolean; conflicts: Assignment[] };
   onDelete: (id: string) => void;
+  onReassign?: (assignmentId: string, targetRowId: string) => void;
+  onDropTargetChange?: (rowId: string | null) => void;
 }
 
 type DragMode = "move" | "resize-left" | "resize-right" | null;
@@ -22,11 +24,23 @@ type DragMode = "move" | "resize-left" | "resize-right" | null;
 const LANE_HEIGHT = 28;
 const LANE_GAP = 2;
 
-export default function GanttBar({ assignment, barColor, barLabel, columns, colWidth, granularity, lane, laneCount, onUpdate, onDelete }: Props) {
+function findRowIdAtPoint(x: number, y: number): string | null {
+  const els = document.elementsFromPoint(x, y);
+  for (const el of els) {
+    const rowEl = (el as HTMLElement).closest("[data-row-id]");
+    if (rowEl) return rowEl.getAttribute("data-row-id");
+  }
+  return null;
+}
+
+export default function GanttBar({
+  assignment, barColor, barLabel, columns, colWidth, granularity,
+  lane, laneCount, onUpdate, onDelete, onReassign, onDropTargetChange,
+}: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
   const [conflict, setConflict] = useState(false);
-  const dragState = useRef({ startX: 0, origStartDate: "", origEndDate: "" });
+  const dragState = useRef({ startX: 0, startY: 0, origStartDate: "", origEndDate: "", currentTargetRowId: null as string | null });
 
   const startDate = parseDate(assignment.startDate);
   const endDate = parseDate(assignment.endDate);
@@ -39,8 +53,10 @@ export default function GanttBar({ assignment, barColor, barLabel, columns, colW
     setConflict(false);
     dragState.current = {
       startX: e.clientX,
+      startY: e.clientY,
       origStartDate: assignment.startDate,
       origEndDate: assignment.endDate,
+      currentTargetRowId: null,
     };
 
     const handleMouseMove = (ev: MouseEvent) => {
@@ -55,36 +71,52 @@ export default function GanttBar({ assignment, barColor, barLabel, columns, colW
       const durationDays = differenceInDays(parseDate(dragState.current.origEndDate), parseDate(dragState.current.origStartDate));
       const pixelsPerDay = barWidth / (durationDays + 1);
       const daysDelta = Math.round(dx / Math.max(pixelsPerDay, 4));
-      if (daysDelta === 0) return;
 
-      let newStart = dragState.current.origStartDate;
-      let newEnd = dragState.current.origEndDate;
+      // Horizontal movement (date changes)
+      if (daysDelta !== 0) {
+        let newStart = dragState.current.origStartDate;
+        let newEnd = dragState.current.origEndDate;
 
-      if (mode === "move") {
-        newStart = dateToString(addDays(parseDate(dragState.current.origStartDate), daysDelta));
-        newEnd = dateToString(addDays(parseDate(dragState.current.origEndDate), daysDelta));
-      } else if (mode === "resize-left") {
-        const proposed = addDays(parseDate(dragState.current.origStartDate), daysDelta);
-        if (proposed <= parseDate(dragState.current.origEndDate)) {
-          newStart = dateToString(proposed);
+        if (mode === "move") {
+          newStart = dateToString(addDays(parseDate(dragState.current.origStartDate), daysDelta));
+          newEnd = dateToString(addDays(parseDate(dragState.current.origEndDate), daysDelta));
+        } else if (mode === "resize-left") {
+          const proposed = addDays(parseDate(dragState.current.origStartDate), daysDelta);
+          if (proposed <= parseDate(dragState.current.origEndDate)) {
+            newStart = dateToString(proposed);
+          }
+        } else if (mode === "resize-right") {
+          const proposed = addDays(parseDate(dragState.current.origEndDate), daysDelta);
+          if (proposed >= parseDate(dragState.current.origStartDate)) {
+            newEnd = dateToString(proposed);
+          }
         }
-      } else if (mode === "resize-right") {
-        const proposed = addDays(parseDate(dragState.current.origEndDate), daysDelta);
-        if (proposed >= parseDate(dragState.current.origStartDate)) {
-          newEnd = dateToString(proposed);
+
+        const result = onUpdate(assignment.id, { startDate: newStart, endDate: newEnd });
+        if (!result.success) {
+          setConflict(true);
+          onUpdate(assignment.id, { startDate: dragState.current.origStartDate, endDate: dragState.current.origEndDate });
+        } else {
+          setConflict(false);
         }
       }
 
-      const result = onUpdate(assignment.id, { startDate: newStart, endDate: newEnd });
-      if (!result.success) {
-        setConflict(true);
-        onUpdate(assignment.id, { startDate: dragState.current.origStartDate, endDate: dragState.current.origEndDate });
-      } else {
-        setConflict(false);
+      // Vertical movement (row reassignment) - only for "move" mode
+      if (mode === "move" && onReassign) {
+        const targetRowId = findRowIdAtPoint(ev.clientX, ev.clientY);
+        if (targetRowId !== dragState.current.currentTargetRowId) {
+          dragState.current.currentTargetRowId = targetRowId;
+          onDropTargetChange?.(targetRowId);
+        }
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (ev: MouseEvent) => {
+      // Handle reassignment on drop
+      if (mode === "move" && onReassign && dragState.current.currentTargetRowId) {
+        onReassign(assignment.id, dragState.current.currentTargetRowId);
+      }
+      onDropTargetChange?.(null);
       setDragMode(null);
       setTimeout(() => setConflict(false), 1500);
       document.removeEventListener("mousemove", handleMouseMove);
@@ -93,7 +125,7 @@ export default function GanttBar({ assignment, barColor, barLabel, columns, colW
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
-  }, [assignment, columns, colWidth, granularity, onUpdate]);
+  }, [assignment, columns, colWidth, granularity, onUpdate, onReassign, onDropTargetChange]);
 
   const durationDays = differenceInDays(endDate, startDate) + 1;
 
@@ -144,7 +176,7 @@ export default function GanttBar({ assignment, barColor, barLabel, columns, colW
         <p>{format(startDate, "MMM d")} - {format(endDate, "MMM d, yyyy")}</p>
         <p className="text-muted-foreground">{durationDays} day{durationDays !== 1 ? "s" : ""} ({workingDays} working day{workingDays !== 1 ? "s" : ""})</p>
         {conflict && <p className="text-destructive font-medium mt-1">Schedule conflict!</p>}
-        <p className="text-muted-foreground mt-1">Right-click to remove</p>
+        <p className="text-muted-foreground mt-1">Drag up/down to reassign. Right-click to remove.</p>
       </TooltipContent>
     </Tooltip>
   );

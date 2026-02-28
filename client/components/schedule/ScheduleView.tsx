@@ -89,6 +89,21 @@ export default function ScheduleView({
   const [dragSelect, setDragSelect] = useState<{ rowId: string; startIdx: number; endIdx: number } | null>(null);
   const isDraggingRef = useRef(false);
 
+  // Vertical drag reassign state
+  const [dropTargetRowId, setDropTargetRowId] = useState<string | null>(null);
+
+  const handleReassign = useCallback((assignmentId: string, targetRowId: string) => {
+    if (groupBy === "project") {
+      updateAssignment(assignmentId, { projectId: targetRowId });
+    } else {
+      updateAssignment(assignmentId, { memberId: targetRowId });
+    }
+  }, [groupBy, updateAssignment]);
+
+  const handleDropTargetChange = useCallback((rowId: string | null) => {
+    setDropTargetRowId(rowId);
+  }, []);
+
   const columns = useMemo(
     () => getTimelineColumns(granularity, offset),
     [granularity, offset],
@@ -391,7 +406,7 @@ export default function ScheduleView({
                     const rowHeight = getRowHeight(laneCount);
 
                     return (
-                      <div key={row.id} className="relative border-b" style={{ height: rowHeight }}>
+                      <div key={row.id} data-row-id={row.id} className={`relative border-b transition-colors ${dropTargetRowId === row.id ? "bg-primary/10 ring-1 ring-inset ring-primary/30" : ""}`} style={{ height: rowHeight }}>
                         {/* Column cells background */}
                         <div className="absolute inset-0 flex">
                           {columns.map((col, i) => {
@@ -433,6 +448,8 @@ export default function ScheduleView({
                               laneCount={laneCount}
                               onUpdate={updateAssignment}
                               onDelete={deleteAssignment}
+                              onReassign={handleReassign}
+                              onDropTargetChange={handleDropTargetChange}
                             />
                           );
                         })}
