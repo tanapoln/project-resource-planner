@@ -18,7 +18,7 @@ interface Props {
   members: Member[];
   projects: Project[];
   teams: Team[];
-  defaults: { memberId?: string; date?: string };
+  defaults: { memberId?: string; date?: string; endDate?: string };
   onSave: (a: Omit<Assignment, "id">) => { success: boolean; conflicts: Assignment[] };
 }
 
@@ -35,9 +35,13 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
       setProjectId(projects[0]?.id ?? "");
       const today = dateToString(new Date());
       setStartDate(defaults.date ?? today);
-      const end = new Date(defaults.date ?? today);
-      end.setDate(end.getDate() + 6);
-      setEndDate(dateToString(end));
+      if (defaults.endDate) {
+        setEndDate(defaults.endDate);
+      } else {
+        const end = new Date(defaults.date ?? today);
+        end.setDate(end.getDate() + 6);
+        setEndDate(dateToString(end));
+      }
       setError("");
     }
   }, [open, defaults, projects]);

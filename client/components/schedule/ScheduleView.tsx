@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useCallback } from "react";
 import { Team, Member, Project, Assignment } from "@/lib/types";
 import {
   Granularity, getTimelineColumns, isWeekend, isTodayInColumn,
-  dateToString,
+  dateToString, columnWidthInDays, addDays,
 } from "@/lib/dateUtils";
 import { assignLanes } from "@/lib/laneUtils";
 import TimelineHeader from "./TimelineHeader";
@@ -82,8 +82,12 @@ export default function ScheduleView({
   const [groupBy, setGroupBy] = useState<GroupBy>("team");
   const [colWidth, setColWidth] = useState(ZOOM_LEVELS.day.default);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogDefaults, setDialogDefaults] = useState<{ memberId?: string; date?: string }>({});
+  const [dialogDefaults, setDialogDefaults] = useState<{ memberId?: string; date?: string; endDate?: string }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Drag-to-select state
+  const [dragSelect, setDragSelect] = useState<{ rowId: string; startIdx: number; endIdx: number } | null>(null);
+  const isDraggingRef = useRef(false);
 
   const columns = useMemo(
     () => getTimelineColumns(granularity, offset),
@@ -173,14 +177,37 @@ export default function ScheduleView({
     return map;
   }, [groups]);
 
-  const handleCellClick = (rowId: string, day: Date) => {
+  const handleCellMouseDown = useCallback((rowId: string, colIdx: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return; // only left click
+    isDraggingRef.current = false;
+    setDragSelect({ rowId, startIdx: colIdx, endIdx: colIdx });
+  }, []);
+
+  const handleCellMouseEnter = useCallback((rowId: string, colIdx: number) => {
+    setDragSelect((prev) => {
+      if (!prev || prev.rowId !== rowId) return prev;
+      if (prev.endIdx !== colIdx) isDraggingRef.current = true;
+      return { ...prev, endIdx: colIdx };
+    });
+  }, []);
+
+  const handleCellMouseUp = useCallback(() => {
+    if (!dragSelect) return;
+    const minIdx = Math.min(dragSelect.startIdx, dragSelect.endIdx);
+    const maxIdx = Math.max(dragSelect.startIdx, dragSelect.endIdx);
+    const startDay = columns[minIdx];
+    // End date = last day of the last selected column
+    const endDay = addDays(columns[maxIdx], columnWidthInDays(granularity, columns[maxIdx]) - 1);
+
     if (groupBy === "project") {
-      setDialogDefaults({ date: dateToString(day) });
+      setDialogDefaults({ date: dateToString(startDay), endDate: dateToString(endDay) });
     } else {
-      setDialogDefaults({ memberId: rowId, date: dateToString(day) });
+      setDialogDefaults({ memberId: dragSelect.rowId, date: dateToString(startDay), endDate: dateToString(endDay) });
     }
     setDialogOpen(true);
-  };
+    setDragSelect(null);
+    isDraggingRef.current = false;
+  }, [dragSelect, columns, granularity, groupBy]);
 
   const handleGranularityChange = (value: string) => {
     const g = value as Granularity;
@@ -370,15 +397,21 @@ export default function ScheduleView({
                           {columns.map((col, i) => {
                             const weekend = granularity === "day" && isWeekend(col);
                             const today = isTodayInColumn(col, granularity);
+                            const isSelected = dragSelect && dragSelect.rowId === row.id &&
+                              i >= Math.min(dragSelect.startIdx, dragSelect.endIdx) &&
+                              i <= Math.max(dragSelect.startIdx, dragSelect.endIdx);
                             return (
                               <div
                                 key={i}
-                                className={`border-r last:border-r-0 cursor-pointer hover:bg-primary/5 transition-colors
+                                className={`border-r last:border-r-0 cursor-crosshair select-none transition-colors
                                   ${weekend ? "bg-muted/30" : ""}
                                   ${today ? "bg-primary/10" : ""}
+                                  ${isSelected ? "!bg-primary/20" : "hover:bg-primary/5"}
                                 `}
                                 style={{ width: colWidth, minWidth: colWidth }}
-                                onClick={() => handleCellClick(row.id, col)}
+                                onMouseDown={(e) => handleCellMouseDown(row.id, i, e)}
+                                onMouseEnter={() => handleCellMouseEnter(row.id, i)}
+                                onMouseUp={handleCellMouseUp}
                               />
                             );
                           })}
@@ -424,7 +457,7 @@ export default function ScheduleView({
           </span>
         )}
         <span className="flex items-center gap-1.5">
-          <CalendarDays className="h-3 w-3" /> Click a cell to assign
+          <CalendarDays className="h-3 w-3" /> Click or drag cells to assign
         </span>
         <span className="ml-auto text-muted-foreground/60">
           Zoom: {Math.round(((colWidth - ZOOM_LEVELS[granularity].min) / (ZOOM_LEVELS[granularity].max - ZOOM_LEVELS[granularity].min)) * 100)}%
