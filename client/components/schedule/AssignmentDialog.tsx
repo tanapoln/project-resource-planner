@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Team, Member, Project, Assignment } from "@/lib/types";
+import { findConflicts } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,13 +35,44 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
       setProjectId(projects[0]?.id ?? "");
       const today = dateToString(new Date());
       setStartDate(defaults.date ?? today);
-      // Default to 7-day assignment
       const end = new Date(defaults.date ?? today);
       end.setDate(end.getDate() + 6);
       setEndDate(dateToString(end));
       setError("");
     }
   }, [open, defaults, projects]);
+
+  // Compute which members have conflicts for the current date range
+  const { availableMembers, conflictedMembers, conflictMap } = useMemo(() => {
+    if (!startDate || !endDate || startDate > endDate) {
+      return { availableMembers: members, conflictedMembers: [] as Member[], conflictMap: new Map<string, string>() };
+    }
+    const available: Member[] = [];
+    const conflicted: Member[] = [];
+    const cMap = new Map<string, string>();
+
+    for (const m of members) {
+      const conflicts = findConflicts(m.id, startDate, endDate);
+      if (conflicts.length > 0) {
+        conflicted.push(m);
+        const projectNames = conflicts.map((c) => {
+          const p = projects.find((pr) => pr.id === c.projectId);
+          return p?.name ?? "Unknown";
+        });
+        cMap.set(m.id, projectNames.join(", "));
+      } else {
+        available.push(m);
+      }
+    }
+    return { availableMembers: available, conflictedMembers: conflicted, conflictMap: cMap };
+  }, [members, projects, startDate, endDate]);
+
+  // If selected member becomes conflicted after date change, clear selection
+  useEffect(() => {
+    if (memberId && conflictMap.has(memberId)) {
+      setMemberId("");
+    }
+  }, [conflictMap, memberId]);
 
   const handleSave = () => {
     if (!memberId || !projectId || !startDate || !endDate) {
@@ -58,7 +90,7 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
         const p = projects.find((pr) => pr.id === c.projectId);
         return p?.name ?? "Unknown";
       });
-      setError(`Schedule conflict! This member is already assigned to: ${conflictProjects.join(", ")} during this period. Each person can only work on 1 project at a time.`);
+      setError(`Schedule conflict! This member is already assigned to: ${conflictProjects.join(", ")} during this period.`);
       return;
     }
     onOpenChange(false);
@@ -80,6 +112,17 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Date fields first so conflict info is computed before member selection */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Start Date</label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">End Date</label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
           <div>
             <label className="text-sm font-medium mb-1.5 block">Member</label>
             <Select value={memberId} onValueChange={setMemberId}>
@@ -87,11 +130,30 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
                 <SelectValue placeholder="Select a member" />
               </SelectTrigger>
               <SelectContent>
-                {members.map((m) => {
+                {availableMembers.map((m) => {
                   const team = getTeamForMember(m.id);
                   return (
                     <SelectItem key={m.id} value={m.id}>
                       {m.name} {team ? `(${team.name})` : ""}
+                    </SelectItem>
+                  );
+                })}
+                {conflictedMembers.length > 0 && availableMembers.length > 0 && (
+                  <div className="mx-1 my-1 h-px bg-border" />
+                )}
+                {conflictedMembers.map((m) => {
+                  const team = getTeamForMember(m.id);
+                  const conflictInfo = conflictMap.get(m.id) ?? "";
+                  return (
+                    <SelectItem key={m.id} value={m.id} disabled>
+                      <span className="flex flex-col">
+                        <span className="text-muted-foreground">
+                          {m.name} {team ? `(${team.name})` : ""}
+                        </span>
+                        <span className="text-[10px] text-destructive/70">
+                          Busy: {conflictInfo}
+                        </span>
+                      </span>
                     </SelectItem>
                   );
                 })}
@@ -115,16 +177,6 @@ export default function AssignmentDialog({ open, onOpenChange, members, projects
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Start Date</label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">End Date</label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
           </div>
 
           {error && (
