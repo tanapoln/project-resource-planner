@@ -114,8 +114,17 @@ export default function ScheduleView({
   deleteAssignment,
 }: Props) {
   const [offset, setOffset] = useState(0);
-  const [granularity, setGranularity] = useState<Granularity>("day");
-  const [groupBy, setGroupBy] = useState<GroupBy>("team");
+  const [granularity, setGranularity] = useState<Granularity>(() => {
+    const saved = localStorage.getItem("schedule-granularity");
+    return saved && saved in GRANULARITY_LABELS ? (saved as Granularity) : "day";
+  });
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => {
+    const saved = localStorage.getItem("schedule-groupBy");
+    return saved && saved in GROUP_BY_LABELS ? (saved as GroupBy) : "team";
+  });
+  useEffect(() => { localStorage.setItem("schedule-granularity", granularity); }, [granularity]);
+  useEffect(() => { localStorage.setItem("schedule-groupBy", groupBy); }, [groupBy]);
+
   const [colWidth, setColWidth] = useState(ZOOM_LEVELS.day.default);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDefaults, setDialogDefaults] = useState<{
