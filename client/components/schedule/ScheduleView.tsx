@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useCallback } from "react";
 import { Team, Member, Project, Assignment } from "@/lib/types";
 import {
   Granularity, getTimelineColumns, isWeekend, isTodayInColumn,
-  dateToString, columnWidthInDays, addDays,
+  dateToString, columnWidthInDays, addDays, parseDate,
 } from "@/lib/dateUtils";
 import { assignLanes } from "@/lib/laneUtils";
 import TimelineHeader from "./TimelineHeader";
@@ -104,9 +104,23 @@ export default function ScheduleView({
     setDropTargetRowId(rowId);
   }, []);
 
+  // Compute min/max dates from all assignments
+  const { dataMinDate, dataMaxDate } = useMemo(() => {
+    if (assignments.length === 0) return { dataMinDate: null, dataMaxDate: null };
+    let min = parseDate(assignments[0].startDate);
+    let max = parseDate(assignments[0].endDate);
+    for (const a of assignments) {
+      const s = parseDate(a.startDate);
+      const e = parseDate(a.endDate);
+      if (s < min) min = s;
+      if (e > max) max = e;
+    }
+    return { dataMinDate: min, dataMaxDate: max };
+  }, [assignments]);
+
   const columns = useMemo(
-    () => getTimelineColumns(granularity, offset),
-    [granularity, offset],
+    () => getTimelineColumns(granularity, offset, dataMinDate, dataMaxDate),
+    [granularity, offset, dataMinDate, dataMaxDate],
   );
 
   const getProject = useCallback((id: string) => projects.find((p) => p.id === id), [projects]);

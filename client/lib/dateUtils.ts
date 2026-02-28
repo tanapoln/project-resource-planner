@@ -10,32 +10,91 @@ export function getTimelineRange(weeksToShow = 6): { start: Date; end: Date; day
   return { start, end, days };
 }
 
-/** Generate columns (Date[]) for a given granularity and offset */
-export function getTimelineColumns(granularity: Granularity, offset: number): Date[] {
+/**
+ * Generate columns (Date[]) for a given granularity and offset.
+ * The range is computed so that:
+ *   1. It always covers [dataMinDate .. dataMaxDate] (all assignment dates).
+ *   2. It meets minimum forward-looking requirements per granularity.
+ *   3. Offset extends the range further for navigation.
+ */
+export function getTimelineColumns(
+  granularity: Granularity,
+  offset: number,
+  dataMinDate?: Date | null,
+  dataMaxDate?: Date | null,
+): Date[] {
   const today = new Date();
-  const columns: Date[] = [];
+  let rangeStart: Date;
+  let rangeEnd: Date;
 
   if (granularity === "day") {
-    const start = startOfWeek(addDays(today, -7), { weekStartsOn: 1 });
-    start.setDate(start.getDate() + offset * 7);
-    for (let i = 0; i < 8 * 7; i++) {
-      columns.push(addDays(start, i));
+    // Show 1 week before today + at least 60 days ahead
+    rangeStart = startOfWeek(addDays(today, -7), { weekStartsOn: 1 });
+    rangeEnd = addDays(today, 60);
+    // Apply offset (7 days per step)
+    if (offset < 0) rangeStart = addDays(rangeStart, offset * 7);
+    if (offset > 0) rangeEnd = addDays(rangeEnd, offset * 7);
+  } else if (granularity === "week") {
+    // Show 4 weeks before + at least 12 weeks ahead
+    rangeStart = startOfWeek(addWeeks(today, -4), { weekStartsOn: 1 });
+    rangeEnd = addWeeks(today, 12);
+    if (offset < 0) rangeStart = addWeeks(rangeStart, offset * 4);
+    if (offset > 0) rangeEnd = addWeeks(rangeEnd, offset * 4);
+  } else if (granularity === "month") {
+    // Show 2 months before + at least 6 months ahead or to end of year
+    rangeStart = startOfMonth(addMonths(today, -2));
+    const sixAhead = addMonths(today, 6);
+    const endOfYear = new Date(today.getFullYear(), 11, 31);
+    rangeEnd = sixAhead > endOfYear ? sixAhead : endOfYear;
+    if (offset < 0) rangeStart = addMonths(rangeStart, offset * 3);
+    if (offset > 0) rangeEnd = addMonths(rangeEnd, offset * 3);
+  } else {
+    // Quarter: show 2 quarters before + at least 3 years ahead
+    rangeStart = startOfQuarter(addQuarters(today, -2));
+    rangeEnd = addQuarters(today, 12); // 3 years = 12 quarters
+    if (offset < 0) rangeStart = addQuarters(rangeStart, offset * 2);
+    if (offset > 0) rangeEnd = addQuarters(rangeEnd, offset * 2);
+  }
+
+  // Rule 1: extend to cover all assignment dates
+  if (dataMinDate && dataMinDate < rangeStart) {
+    if (granularity === "day") rangeStart = startOfWeek(dataMinDate, { weekStartsOn: 1 });
+    else if (granularity === "week") rangeStart = startOfWeek(dataMinDate, { weekStartsOn: 1 });
+    else if (granularity === "month") rangeStart = startOfMonth(dataMinDate);
+    else rangeStart = startOfQuarter(dataMinDate);
+  }
+  if (dataMaxDate && dataMaxDate > rangeEnd) {
+    rangeEnd = dataMaxDate;
+  }
+
+  // Generate columns from rangeStart to rangeEnd
+  const columns: Date[] = [];
+  if (granularity === "day") {
+    let d = new Date(rangeStart);
+    while (d <= rangeEnd) {
+      columns.push(new Date(d));
+      d = addDays(d, 1);
     }
   } else if (granularity === "week") {
-    let start = startOfWeek(addWeeks(today, -4 + offset * 4), { weekStartsOn: 1 });
-    for (let i = 0; i < 20; i++) {
-      columns.push(addWeeks(start, i));
+    let d = startOfWeek(rangeStart, { weekStartsOn: 1 });
+    const endBound = addWeeks(rangeEnd, 1);
+    while (d <= endBound) {
+      columns.push(new Date(d));
+      d = addWeeks(d, 1);
     }
   } else if (granularity === "month") {
-    let start = startOfMonth(addMonths(today, -2 + offset * 3));
-    for (let i = 0; i < 12; i++) {
-      columns.push(addMonths(start, i));
+    let d = startOfMonth(rangeStart);
+    const endBound = addMonths(rangeEnd, 1);
+    while (d <= endBound) {
+      columns.push(new Date(d));
+      d = addMonths(d, 1);
     }
   } else {
-    // quarter
-    let start = startOfQuarter(addQuarters(today, -1 + offset * 2));
-    for (let i = 0; i < 8; i++) {
-      columns.push(addQuarters(start, i));
+    let d = startOfQuarter(rangeStart);
+    const endBound = addQuarters(rangeEnd, 1);
+    while (d <= endBound) {
+      columns.push(new Date(d));
+      d = addQuarters(d, 1);
     }
   }
 
