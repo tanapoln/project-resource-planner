@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Team, Member } from "@/lib/types";
+import { parseMemberCsv } from "@/lib/csvImport";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import {
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Users, UserPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, UserPlus, Upload, GripVertical } from "lucide-react";
 
 interface Props {
   teams: Team[];
@@ -32,6 +33,14 @@ export default function MembersPanel({
   const [memberDialog, setMemberDialog] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [csvDialog, setCsvDialog] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<{ name: string; role: string; team: string }[]>([]);
+  const [csvFileName, setCsvFileName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Drag state
+  const [dragMemberId, setDragMemberId] = useState<string | null>(null);
+  const [dropTargetTeamId, setDropTargetTeamId] = useState<string | null>(null);
 
   // Team form state
   const [teamName, setTeamName] = useState("");
@@ -90,7 +99,81 @@ export default function MembersPanel({
     setMemberDialog(false);
   };
 
-  const getTeam = (id: string) => teams.find((t) => t.id === id);
+  // --- CSV Import ---
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseMemberCsv(text);
+      setCsvPreview(rows);
+      setCsvDialog(true);
+    };
+    reader.readAsText(file);
+    // Reset so same file can be picked again
+    e.target.value = "";
+  };
+
+  const handleCsvImport = () => {
+    for (const row of csvPreview) {
+      // Find or create team
+      let teamId = "";
+      if (row.team) {
+        const existing = teams.find((t) => t.name.toLowerCase() === row.team.toLowerCase());
+        if (existing) {
+          teamId = existing.id;
+        } else {
+          const newTeam = addTeam({
+            name: row.team,
+            color: TEAM_COLORS[(teams.length) % TEAM_COLORS.length],
+          });
+          teamId = newTeam.id;
+        }
+      } else {
+        teamId = teams[0]?.id ?? "";
+      }
+      if (teamId) {
+        addMember({ name: row.name, role: row.role, teamId });
+      }
+    }
+    setCsvDialog(false);
+    setCsvPreview([]);
+  };
+
+  // --- Drag and Drop ---
+  const handleDragStart = useCallback((e: React.DragEvent, memberId: string) => {
+    setDragMemberId(memberId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", memberId);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, teamId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetTeamId(teamId);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDropTargetTeamId(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, teamId: string) => {
+    e.preventDefault();
+    const memberId = e.dataTransfer.getData("text/plain");
+    if (memberId) {
+      updateMember(memberId, { teamId });
+    }
+    setDragMemberId(null);
+    setDropTargetTeamId(null);
+  }, [updateMember]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragMemberId(null);
+    setDropTargetTeamId(null);
+  }, []);
+
   const membersByTeam = teams.map((t) => ({
     team: t,
     members: members.filter((m) => m.teamId === t.id),
@@ -100,14 +183,24 @@ export default function MembersPanel({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Teams & Members</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             {teams.length} teams, {members.length} members
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-1" /> Import CSV
+          </Button>
           <Button variant="outline" size="sm" onClick={() => openTeamDialog()}>
             <Users className="h-4 w-4 mr-1" /> Add Team
           </Button>
@@ -119,42 +212,58 @@ export default function MembersPanel({
 
       {/* Team groups */}
       <div className="space-y-4">
-        {membersByTeam.map(({ team, members: teamMembers }) => (
-          <div key={team.id} className="bg-card rounded-lg border overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: team.color }} />
-                <span className="font-medium text-sm">{team.name}</span>
-                <Badge variant="secondary" className="text-xs">{teamMembers.length}</Badge>
+        {membersByTeam.map(({ team, members: teamMembers }) => {
+          const isDropTarget = dropTargetTeamId === team.id;
+          return (
+            <div
+              key={team.id}
+              className={`bg-card rounded-lg border overflow-hidden transition-all ${
+                isDropTarget ? "ring-2 ring-primary border-primary shadow-md" : ""
+              }`}
+              onDragOver={(e) => handleDragOver(e, team.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, team.id)}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: team.color }} />
+                  <span className="font-medium text-sm">{team.name}</span>
+                  <Badge variant="secondary" className="text-xs">{teamMembers.length}</Badge>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTeamDialog(team)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteTeam(team.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTeamDialog(team)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteTeam(team.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              {teamMembers.length === 0 ? (
+                <div className={`px-4 py-6 text-center text-sm transition-colors ${
+                  isDropTarget ? "text-primary bg-primary/5" : "text-muted-foreground"
+                }`}>
+                  {isDropTarget ? "Drop here to move to this team" : "No members in this team yet. Drag members here."}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {teamMembers.map((member) => (
+                    <MemberRow
+                      key={member.id}
+                      member={member}
+                      team={team}
+                      isDragging={dragMemberId === member.id}
+                      onEdit={() => openMemberDialog(member)}
+                      onDelete={() => deleteMember(member.id)}
+                      onDragStart={(e) => handleDragStart(e, member.id)}
+                      onDragEnd={handleDragEnd}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-            {teamMembers.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                No members in this team yet.
-              </div>
-            ) : (
-              <div className="divide-y">
-                {teamMembers.map((member) => (
-                  <MemberRow
-                    key={member.id}
-                    member={member}
-                    team={team}
-                    onEdit={() => openMemberDialog(member)}
-                    onDelete={() => deleteMember(member.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
 
         {unassigned.length > 0 && (
           <div className="bg-card rounded-lg border overflow-hidden">
@@ -166,8 +275,11 @@ export default function MembersPanel({
                 <MemberRow
                   key={member.id}
                   member={member}
+                  isDragging={dragMemberId === member.id}
                   onEdit={() => openMemberDialog(member)}
                   onDelete={() => deleteMember(member.id)}
+                  onDragStart={(e) => handleDragStart(e, member.id)}
+                  onDragEnd={handleDragEnd}
                 />
               ))}
             </div>
@@ -248,6 +360,61 @@ export default function MembersPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* CSV Import Preview Dialog */}
+      <Dialog open={csvDialog} onOpenChange={setCsvDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import Members from CSV</DialogTitle>
+            <DialogDescription>
+              Preview of {csvPreview.length} member{csvPreview.length !== 1 ? "s" : ""} from "{csvFileName}".
+              Members will be added to existing or new teams.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 overflow-y-auto border rounded-md">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Name</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Role</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Team</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {csvPreview.map((row, i) => (
+                  <tr key={i} className="hover:bg-muted/20">
+                    <td className="px-3 py-2">{row.name}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{row.role || "—"}</td>
+                    <td className="px-3 py-2">
+                      {row.team ? (
+                        <Badge variant={teams.some((t) => t.name.toLowerCase() === row.team.toLowerCase()) ? "secondary" : "outline"} className="text-xs">
+                          {row.team}
+                          {!teams.some((t) => t.name.toLowerCase() === row.team.toLowerCase()) && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">(new)</span>
+                          )}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Default</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {csvPreview.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No valid rows found. Make sure the CSV has columns: Name, Role, Team.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvDialog(false)}>Cancel</Button>
+            <Button onClick={handleCsvImport} disabled={csvPreview.length === 0}>
+              Import {csvPreview.length} Member{csvPreview.length !== 1 ? "s" : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -255,13 +422,19 @@ export default function MembersPanel({
 function MemberRow({
   member,
   team,
+  isDragging,
   onEdit,
   onDelete,
+  onDragStart,
+  onDragEnd,
 }: {
   member: Member;
   team?: Team;
+  isDragging: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }) {
   const initials = member.name
     .split(" ")
@@ -271,8 +444,16 @@ function MemberRow({
     .slice(0, 2);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 transition-colors">
+    <div
+      className={`flex items-center justify-between px-4 py-3 hover:bg-muted/20 transition-all ${
+        isDragging ? "opacity-40 bg-muted/30" : ""
+      }`}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       <div className="flex items-center gap-3">
+        <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
           style={{ backgroundColor: team?.color ?? "#94a3b8" }}
