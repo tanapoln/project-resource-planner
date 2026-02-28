@@ -296,8 +296,8 @@ export default function ScheduleView({
       <div className="border rounded-lg bg-card overflow-hidden">
         <div className="flex">
           {/* Left sidebar */}
-          <div className="shrink-0 w-48 border-r bg-card z-10">
-            <div className="h-[58px] border-b bg-muted/30 flex items-end px-3 pb-1.5">
+          <div className="shrink-0 w-48 border-r bg-card z-10 overflow-x-scroll">
+            <div className="h-[60px] border-b bg-muted/30 flex items-end px-3 pb-1.5">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{sidebarLabel}</span>
             </div>
             {groups.map((group) => (
@@ -323,7 +323,7 @@ export default function ScheduleView({
 
               {groups.map((group) => (
                 <div key={group.id}>
-                  {group.label && <div className="bg-muted/40 border-b" style={{ height: 28 }} />}
+                  {group.label && <div className="bg-muted/40 border-b" style={{ height: 'calc(1rem + 1px + (0.5rem * 2))' }} />}
                   {group.rows.map((row) => {
                     const laneData = rowLaneData.get(row.id);
                     const laneMap = laneData?.lanes ?? new Map();

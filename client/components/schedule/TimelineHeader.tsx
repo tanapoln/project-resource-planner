@@ -26,9 +26,9 @@ export default function TimelineHeader({ columns, colWidth, granularity }: Props
   }, [columns, granularity]);
 
   return (
-    <div className="sticky top-0 z-20 bg-card border-b">
+    <div className="sticky top-0 z-20 bg-card border-b h-[60px]">
       {/* Group row (month/year) */}
-      <div className="flex border-b">
+      <div className="flex border-b h-[30px]">
         {groups.map((g, i) => (
           <div
             key={i}
@@ -40,7 +40,7 @@ export default function TimelineHeader({ columns, colWidth, granularity }: Props
         ))}
       </div>
       {/* Column labels row */}
-      <div className="flex">
+      <div className="flex h-[30px]">
         {columns.map((col, i) => {
           const weekend = granularity === "day" && isWeekend(col);
           const today = isTodayInColumn(col, granularity);
