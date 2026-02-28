@@ -218,6 +218,23 @@ export default function MembersPanel({
     setDropTargetTeamIdx(null);
   }, []);
 
+  const handleExportCsv = useCallback(() => {
+    const header = "Name,Role,Team";
+    const rows = members.map((m) => {
+      const team = teams.find((t) => t.id === m.teamId);
+      const escapeCsv = (v: string) => v.includes(",") || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v;
+      return `${escapeCsv(m.name)},${escapeCsv(m.role)},${escapeCsv(team?.name ?? "")}`;
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "members-export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [members, teams]);
+
   const membersByTeam = teams.map((t) => ({
     team: t,
     members: members.filter((m) => m.teamId === t.id),
@@ -242,11 +259,9 @@ export default function MembersPanel({
             className="hidden"
             onChange={handleFileSelect}
           />
-          <a href="/sample-members.csv" download="sample-members.csv" className="inline-flex">
-            <Button variant="outline" size="sm" type="button" asChild>
-              <span><Download className="h-4 w-4 mr-1" /> Sample CSV</span>
-            </Button>
-          </a>
+          <Button variant="outline" size="sm" onClick={handleExportCsv}>
+            <Download className="h-4 w-4 mr-1" /> Export CSV
+          </Button>
           <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-4 w-4 mr-1" /> Import CSV
           </Button>
