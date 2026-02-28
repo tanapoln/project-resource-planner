@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Team, Member, Project, Assignment } from "@/lib/types";
 import {
   Granularity, getTimelineColumns, isWeekend, isTodayInColumn,
@@ -85,7 +85,24 @@ export default function ScheduleView({
   const [dialogDefaults, setDialogDefaults] = useState<{ memberId?: string; date?: string; endDate?: string }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const isSyncingScroll = useRef(false);
+  const [dateHeaderTop, setDateHeaderTop] = useState(0);
+
+  // Measure toolbar to position sticky date header right below it
+  useEffect(() => {
+    const measure = () => {
+      if (toolbarRef.current) {
+        // app header = 56px (top-14), then toolbar height + py-3 padding
+        setDateHeaderTop(56 + toolbarRef.current.offsetHeight);
+      }
+    };
+    measure();
+    // Re-measure on resize since toolbar may wrap on narrow screens
+    const ro = new ResizeObserver(measure);
+    ro.observe(toolbarRef.current!);
+    return () => ro.disconnect();
+  }, []);
 
   const handleBodyScroll = useCallback(() => {
     if (isSyncingScroll.current) return;
@@ -332,7 +349,7 @@ export default function ScheduleView({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-14 z-20 bg-background py-3 -mt-3">
+      <div ref={toolbarRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-14 z-30 bg-background py-3 -mt-3">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Schedule</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -404,7 +421,7 @@ export default function ScheduleView({
       {/* Gantt Chart */}
       <div className="border rounded-lg bg-card">
         {/* Sticky date header */}
-        <div className="sticky top-[6.5rem] z-20 bg-card rounded-t-lg border-b">
+        <div className="sticky z-20 bg-card rounded-t-lg border-b" style={{ top: dateHeaderTop }}>
           <div className="flex">
             <div className="shrink-0 w-48 border-r bg-muted/30 flex items-end px-3 pb-1.5 h-[60px]">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{sidebarLabel}</span>
