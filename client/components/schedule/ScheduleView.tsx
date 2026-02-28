@@ -84,6 +84,26 @@ export default function ScheduleView({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDefaults, setDialogDefaults] = useState<{ memberId?: string; date?: string; endDate?: string }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncingScroll = useRef(false);
+
+  const handleBodyScroll = useCallback(() => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (headerScrollRef.current && scrollRef.current) {
+      headerScrollRef.current.scrollLeft = scrollRef.current.scrollLeft;
+    }
+    isSyncingScroll.current = false;
+  }, []);
+
+  const handleHeaderScroll = useCallback(() => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (scrollRef.current && headerScrollRef.current) {
+      scrollRef.current.scrollLeft = headerScrollRef.current.scrollLeft;
+    }
+    isSyncingScroll.current = false;
+  }, []);
 
   // Drag-to-select state
   const [dragSelect, setDragSelect] = useState<{ rowId: string; startIdx: number; endIdx: number } | null>(null);
@@ -382,13 +402,25 @@ export default function ScheduleView({
       </div>
 
       {/* Gantt Chart */}
-      <div className="border rounded-lg bg-card overflow-hidden">
-        <div className="flex">
-          {/* Left sidebar */}
-          <div className="shrink-0 w-48 border-r bg-card z-10 overflow-x-scroll">
-            <div className="h-[60px] border-b bg-muted/30 flex items-end px-3 pb-1.5">
+      <div className="border rounded-lg bg-card">
+        {/* Sticky date header */}
+        <div className="sticky top-[6.5rem] z-20 bg-card rounded-t-lg border-b">
+          <div className="flex">
+            <div className="shrink-0 w-48 border-r bg-muted/30 flex items-end px-3 pb-1.5 h-[60px]">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{sidebarLabel}</span>
             </div>
+            <div ref={headerScrollRef} className="overflow-hidden flex-1" onScroll={handleHeaderScroll}>
+              <div style={{ width: totalWidth, minWidth: totalWidth }}>
+                <TimelineHeader columns={columns} colWidth={colWidth} granularity={granularity} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex">
+          {/* Left sidebar */}
+          <div className="shrink-0 w-48 border-r bg-card z-10">
             {groups.map((group) => (
               <div key={group.id}>
                 {group.label && (
@@ -405,11 +437,9 @@ export default function ScheduleView({
             ))}
           </div>
 
-          {/* Right scrollable timeline */}
-          <div ref={scrollRef} className="overflow-x-auto flex-1">
+          {/* Right scrollable timeline body */}
+          <div ref={scrollRef} className="overflow-x-auto flex-1" onScroll={handleBodyScroll}>
             <div style={{ width: totalWidth, minWidth: totalWidth }}>
-              <TimelineHeader columns={columns} colWidth={colWidth} granularity={granularity} />
-
               {groups.map((group) => (
                 <div key={group.id}>
                   {group.label && <div className="bg-muted/40 border-b" style={{ height: 'calc(1rem + 1px + (0.5rem * 2))' }} />}

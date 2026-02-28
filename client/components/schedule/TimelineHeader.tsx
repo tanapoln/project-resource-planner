@@ -26,7 +26,7 @@ export default function TimelineHeader({ columns, colWidth, granularity }: Props
   }, [columns, granularity]);
 
   return (
-    <div className="sticky top-0 z-20 bg-card border-b h-[60px]">
+    <div className="bg-card h-[60px]">
       {/* Group row (month/year) */}
       <div className="flex border-b h-[30px]">
         {groups.map((g, i) => (
