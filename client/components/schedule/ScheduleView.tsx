@@ -125,7 +125,7 @@ export default function ScheduleView({
   useEffect(() => { localStorage.setItem("schedule-granularity", granularity); }, [granularity]);
   useEffect(() => { localStorage.setItem("schedule-groupBy", groupBy); }, [groupBy]);
 
-  const [colWidth, setColWidth] = useState(ZOOM_LEVELS.day.default);
+  const [colWidth, setColWidth] = useState(() => ZOOM_LEVELS[granularity].default);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDefaults, setDialogDefaults] = useState<{
     memberId?: string;
