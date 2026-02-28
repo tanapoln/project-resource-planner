@@ -11,13 +11,18 @@ interface Props {
   columns: Date[];
   colWidth: number;
   granularity: Granularity;
+  lane: number;
+  laneCount: number;
   onUpdate: (id: string, data: Partial<Assignment>) => { success: boolean; conflicts: Assignment[] };
   onDelete: (id: string) => void;
 }
 
 type DragMode = "move" | "resize-left" | "resize-right" | null;
 
-export default function GanttBar({ assignment, barColor, barLabel, columns, colWidth, granularity, onUpdate, onDelete }: Props) {
+const LANE_HEIGHT = 28;
+const LANE_GAP = 2;
+
+export default function GanttBar({ assignment, barColor, barLabel, columns, colWidth, granularity, lane, laneCount, onUpdate, onDelete }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
   const [conflict, setConflict] = useState(false);
@@ -97,13 +102,15 @@ export default function GanttBar({ assignment, barColor, barLabel, columns, colW
       <TooltipTrigger asChild>
         <div
           ref={barRef}
-          className={`gantt-bar absolute top-1 h-[calc(100%-8px)] flex items-center group select-none
+          className={`gantt-bar absolute flex items-center group select-none
             ${conflict ? "ring-2 ring-destructive animate-pulse" : ""}
             ${dragMode ? "opacity-80 shadow-xl z-30" : "z-10"}
           `}
           style={{
             left,
             width: Math.max(width, 8),
+            top: lane * (LANE_HEIGHT + LANE_GAP) + LANE_GAP,
+            height: LANE_HEIGHT,
             backgroundColor: barColor,
           }}
           onMouseDown={(e) => handleMouseDown(e, "move")}

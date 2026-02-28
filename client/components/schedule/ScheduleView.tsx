@@ -4,6 +4,7 @@ import {
   Granularity, getTimelineColumns, isWeekend, isTodayInColumn,
   dateToString,
 } from "@/lib/dateUtils";
+import { assignLanes } from "@/lib/laneUtils";
 import TimelineHeader from "./TimelineHeader";
 import GanttBar from "./GanttBar";
 import AssignmentDialog from "./AssignmentDialog";
@@ -26,7 +27,13 @@ interface Props {
 
 type GroupBy = "team" | "member" | "project";
 
-const ROW_HEIGHT = 40;
+const LANE_HEIGHT = 28;
+const LANE_GAP = 2;
+const MIN_ROW_HEIGHT = 40;
+
+function getRowHeight(laneCount: number): number {
+  return Math.max(laneCount * (LANE_HEIGHT + LANE_GAP) + LANE_GAP, MIN_ROW_HEIGHT);
+}
 
 const ZOOM_LEVELS: Record<Granularity, { min: number; max: number; default: number; step: number }> = {
   day:     { min: 20, max: 60,  default: 36,  step: 4 },
@@ -48,13 +55,11 @@ const GROUP_BY_LABELS: Record<GroupBy, string> = {
   project: "By Project",
 };
 
-// Describes one row in the gantt chart
 interface SwimlaneRow {
   id: string;
   assignments: Assignment[];
 }
 
-// Describes a group (header + rows)
 interface SwimlaneGroup {
   id: string;
   label: string;
@@ -106,7 +111,6 @@ export default function ScheduleView({
     }
 
     if (groupBy === "member") {
-      // Flat list: each row is a member, no grouping headers
       const rows: SwimlaneRow[] = members.map((m) => ({
         id: m.id,
         assignments: assignments.filter((a) => a.memberId === m.id),
@@ -136,9 +140,19 @@ export default function ScheduleView({
     return { groups: g, sidebarLabel: "Project" };
   }, [groupBy, teams, members, projects, assignments]);
 
+  // Pre-compute lane info for every row
+  const rowLaneData = useMemo(() => {
+    const map = new Map<string, { lanes: Map<string, number>; laneCount: number }>();
+    for (const group of groups) {
+      for (const row of group.rows) {
+        map.set(row.id, assignLanes(row.assignments));
+      }
+    }
+    return map;
+  }, [groups]);
+
   const handleCellClick = (rowId: string, day: Date) => {
     if (groupBy === "project") {
-      // rowId is projectId — open dialog without member pre-filled
       setDialogDefaults({ date: dateToString(day) });
     } else {
       setDialogDefaults({ memberId: rowId, date: dateToString(day) });
@@ -163,13 +177,15 @@ export default function ScheduleView({
   const totalWidth = columns.length * colWidth;
   const navStep = granularity === "day" ? 2 : 1;
 
-  // Helpers to render sidebar row content
   const renderSidebarRow = (row: SwimlaneRow) => {
+    const laneData = rowLaneData.get(row.id);
+    const rowHeight = getRowHeight(laneData?.laneCount ?? 1);
+
     if (groupBy === "project") {
       const proj = getProject(row.id);
       if (!proj) return null;
       return (
-        <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: ROW_HEIGHT }}>
+        <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: rowHeight }}>
           <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: proj.color }} />
           <div className="min-w-0">
             <p className="text-xs font-medium truncate">{proj.name}</p>
@@ -178,12 +194,11 @@ export default function ScheduleView({
         </div>
       );
     }
-    // member or team mode — row is a member
     const member = getMember(row.id);
     if (!member) return null;
     const team = getTeam(member.teamId);
     return (
-      <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: ROW_HEIGHT }}>
+      <div className="flex items-center gap-2 px-3 border-b hover:bg-muted/20 transition-colors" style={{ height: rowHeight }}>
         <div
           className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
           style={{ backgroundColor: team?.color ?? "#94a3b8" }}
@@ -200,10 +215,8 @@ export default function ScheduleView({
     );
   };
 
-  // Determine bar color and label for each assignment based on groupBy
   const getBarInfo = useCallback((assignment: Assignment): { color: string; label: string } => {
     if (groupBy === "project") {
-      // Bars represent members
       const member = getMember(assignment.memberId);
       const team = getTeam(member?.teamId ?? "");
       return {
@@ -211,7 +224,6 @@ export default function ScheduleView({
         label: member?.name ?? "Unknown",
       };
     }
-    // Bars represent projects
     const proj = getProject(assignment.projectId);
     return {
       color: proj?.color ?? "#94a3b8",
@@ -230,7 +242,6 @@ export default function ScheduleView({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Group-by selector */}
           <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
             <SelectTrigger className="h-8 w-[120px] text-xs">
               <SelectValue />
@@ -242,7 +253,6 @@ export default function ScheduleView({
             </SelectContent>
           </Select>
 
-          {/* Granularity selector */}
           <Select value={granularity} onValueChange={handleGranularityChange}>
             <SelectTrigger className="h-8 w-[110px] text-xs">
               <SelectValue />
@@ -254,7 +264,6 @@ export default function ScheduleView({
             </SelectContent>
           </Select>
 
-          {/* Zoom controls */}
           <div className="flex items-center border rounded-md">
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-r-none" onClick={zoomOut} disabled={colWidth <= ZOOM_LEVELS[granularity].min}>
               <ZoomOut className="h-3.5 w-3.5" />
@@ -265,7 +274,6 @@ export default function ScheduleView({
             </Button>
           </div>
 
-          {/* Navigation */}
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setOffset((o) => o - navStep)}>
               <ChevronLeft className="h-4 w-4" />
@@ -294,7 +302,6 @@ export default function ScheduleView({
             </div>
             {groups.map((group) => (
               <div key={group.id}>
-                {/* Group header — only show if there's a label (team mode) */}
                 {group.label && (
                   <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.color }} />
@@ -317,45 +324,55 @@ export default function ScheduleView({
               {groups.map((group) => (
                 <div key={group.id}>
                   {group.label && <div className="bg-muted/40 border-b" style={{ height: 28 }} />}
-                  {group.rows.map((row) => (
-                    <div key={row.id} className="relative border-b" style={{ height: ROW_HEIGHT }}>
-                      {/* Column cells background */}
-                      <div className="absolute inset-0 flex">
-                        {columns.map((col, i) => {
-                          const weekend = granularity === "day" && isWeekend(col);
-                          const today = isTodayInColumn(col, granularity);
+                  {group.rows.map((row) => {
+                    const laneData = rowLaneData.get(row.id);
+                    const laneMap = laneData?.lanes ?? new Map();
+                    const laneCount = laneData?.laneCount ?? 1;
+                    const rowHeight = getRowHeight(laneCount);
+
+                    return (
+                      <div key={row.id} className="relative border-b" style={{ height: rowHeight }}>
+                        {/* Column cells background */}
+                        <div className="absolute inset-0 flex">
+                          {columns.map((col, i) => {
+                            const weekend = granularity === "day" && isWeekend(col);
+                            const today = isTodayInColumn(col, granularity);
+                            return (
+                              <div
+                                key={i}
+                                className={`border-r last:border-r-0 cursor-pointer hover:bg-primary/5 transition-colors
+                                  ${weekend ? "bg-muted/30" : ""}
+                                  ${today ? "bg-primary/10" : ""}
+                                `}
+                                style={{ width: colWidth, minWidth: colWidth }}
+                                onClick={() => handleCellClick(row.id, col)}
+                              />
+                            );
+                          })}
+                        </div>
+                        {/* Assignment bars */}
+                        {row.assignments.map((assignment) => {
+                          const barInfo = getBarInfo(assignment);
+                          const lane = laneMap.get(assignment.id) ?? 0;
                           return (
-                            <div
-                              key={i}
-                              className={`border-r last:border-r-0 cursor-pointer hover:bg-primary/5 transition-colors
-                                ${weekend ? "bg-muted/30" : ""}
-                                ${today ? "bg-primary/10" : ""}
-                              `}
-                              style={{ width: colWidth, minWidth: colWidth }}
-                              onClick={() => handleCellClick(row.id, col)}
+                            <GanttBar
+                              key={assignment.id}
+                              assignment={assignment}
+                              barColor={barInfo.color}
+                              barLabel={barInfo.label}
+                              columns={columns}
+                              colWidth={colWidth}
+                              granularity={granularity}
+                              lane={lane}
+                              laneCount={laneCount}
+                              onUpdate={updateAssignment}
+                              onDelete={deleteAssignment}
                             />
                           );
                         })}
                       </div>
-                      {/* Assignment bars */}
-                      {row.assignments.map((assignment) => {
-                        const barInfo = getBarInfo(assignment);
-                        return (
-                          <GanttBar
-                            key={assignment.id}
-                            assignment={assignment}
-                            barColor={barInfo.color}
-                            barLabel={barInfo.label}
-                            columns={columns}
-                            colWidth={colWidth}
-                            granularity={granularity}
-                            onUpdate={updateAssignment}
-                            onDelete={deleteAssignment}
-                          />
-                        );
-                      })}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ))}
             </div>
