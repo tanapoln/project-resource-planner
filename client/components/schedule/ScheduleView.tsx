@@ -755,6 +755,7 @@ export default function ScheduleView({
         teams={teams}
         defaults={dialogDefaults}
         onSave={addAssignment}
+        onCreateProject={addProject}
       />
     </div>
   );
