@@ -312,7 +312,7 @@ export default function ScheduleView({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-14 z-20 bg-background py-3 -mt-3">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Schedule</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
