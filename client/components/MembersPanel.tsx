@@ -122,19 +122,24 @@ export default function MembersPanel({
   };
 
   const handleCsvImport = () => {
+    const teamMap = new Map<string, string>();
+    for (const t of teams) teamMap.set(t.name.toLowerCase(), t.id);
+    let teamColorIdx = teams.length;
+
     for (const row of csvPreview) {
-      // Find or create team
       let teamId = "";
       if (row.team) {
-        const existing = teams.find((t) => t.name.toLowerCase() === row.team.toLowerCase());
-        if (existing) {
-          teamId = existing.id;
+        const key = row.team.toLowerCase();
+        if (teamMap.has(key)) {
+          teamId = teamMap.get(key)!;
         } else {
           const newTeam = addTeam({
             name: row.team,
-            color: TEAM_COLORS[(teams.length) % TEAM_COLORS.length],
+            color: TEAM_COLORS[teamColorIdx % TEAM_COLORS.length],
           });
           teamId = newTeam.id;
+          teamMap.set(key, teamId);
+          teamColorIdx++;
         }
       } else {
         teamId = teams[0]?.id ?? "";
